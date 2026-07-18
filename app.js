@@ -9,144 +9,17 @@ try {
 
 function getAppDir() { 
     if (!os || !path || !fs) return ''; 
-    const appDir = path.join(os.homedir(), 'VFXVec_Data'); 
+    const appDir = path.join(os.homedir(), 'PiXVec_Data'); 
     if (!fs.existsSync(appDir)) fs.mkdirSync(appDir); 
     return appDir; 
 }
 
-// Estructura de Datos para la Animación Cinematográfica
-class PixelFrame {
-    constructor(width, height) {
-        this.layers = []; // Array de capas instanciadas en RAM para este fotograma
-        this.duration = 1; // Duración en ticks del timeline
-        this.serializedLayers = []; // Almacenamiento binario para optimización de RAM
-    }
-
-    serialize() {
-        this.serializedLayers = this.layers.map(l => {
-            const ctx = l.ctx;
-            return {
-                name: l.name,
-                visible: l.visible,
-                opacity: l.opacity,
-                blendMode: l.blendMode,
-                tintColor: l.tintColor,
-                tintFactor: l.tintFactor,
-                pixels: ctx.getImageData(0, 0, width, height).data
-            };
-        });
-        this.layers = []; // Libera memoria de canvas del DOM/GPU
-    }
-
-    deserialize() {
-        if (this.serializedLayers.length === 0) return;
-        this.layers = this.serializedLayers.map((sl, index) => {
-            const l = createLayer(sl.name);
-            l.id = index;
-            l.visible = sl.visible;
-            l.opacity = sl.opacity;
-            l.blendMode = sl.blendMode;
-            l.tintColor = sl.tintColor || '#3b82f6';
-            l.tintFactor = sl.tintFactor !== undefined ? sl.tintFactor : 0.0;
-            
-            const imgData = l.ctx.createImageData(width, height);
-            imgData.data.set(sl.pixels);
-            l.ctx.putImageData(imgData, 0, 0);
-            return l;
-        });
-        this.serializedLayers = []; // Limpia serialización activa
-    }
-}
-
-class PixelTimeline {
-    constructor() {
-        this.frames = []; 
-        this.currentFrameIndex = 0;
-        this.fps = 12;
-        this.isPlaying = false;
-        this.loop = true;
-        this.onionSkinOn = false;
-        this.onionSkinPrevCount = 1;
-        this.onionSkinNextCount = 1;
-    }
-}
-
-// Motores de Partículas VFX Deterministas
-class PixelParticle {
-    constructor(x, y, vx, vy, color, lifetime) {
-        this.x = x; 
-        this.y = y;
-        this.vx = vx; 
-        this.vy = vy;
-        this.color = color;
-        this.maxLifetime = lifetime;
-        this.lifetime = lifetime;
-    }
-}
-
-class PixelEmitter {
-    constructor(x, y) {
-        this.x = x;
-        this.y = y;
-        this.particles = [];
-        this.rate = 3; 
-        this.angle = -90; 
-        this.spread = 45; 
-        this.gravity = 0.03;
-        this.lifetime = 18;
-        this.colorPaletteGradient = ['#ef7d57', '#b13e53', '#5d275d']; // Gradiente térmico
-        this.active = true;
-    }
-
-    emit() {
-        if (!this.active) return;
-        for (let i = 0; i < this.rate; i++) {
-            const rad = (this.angle + (Math.random() - 0.5) * this.spread) * Math.PI / 180;
-            const speed = 0.4 + Math.random() * 1.2;
-            const vx = Math.cos(rad) * speed;
-            const vy = Math.sin(rad) * speed;
-            const color = this.colorPaletteGradient[0] || currentColor;
-            this.particles.push(new PixelParticle(this.x, this.y, vx, vy, color, this.lifetime + Math.floor(Math.random() * 8)));
-        }
-    }
-
-    update(vField) {
-        this.particles.forEach(p => {
-            const px = Math.floor(p.x);
-            const py = Math.floor(p.y);
-            if (px >= 0 && px < width && py >= 0 && py < height) {
-                const fIdx = (py * width + px) * 2;
-                const fx = vField[fIdx];
-                const fy = vField[fIdx + 1];
-                p.vx += fx * 0.08;
-                p.vy += fy * 0.08;
-            }
-
-            p.vy += this.gravity; 
-            p.x += p.vx;
-            p.y += p.vy;
-            p.lifetime--;
-
-            const ageRatio = 1 - (p.lifetime / p.maxLifetime);
-            const colorCount = this.colorPaletteGradient.length;
-            if (colorCount > 1) {
-                const segment = 1 / (colorCount - 1);
-                const i = Math.min(colorCount - 2, Math.floor(ageRatio / segment));
-                const localRatio = (ageRatio - (i * segment)) / segment;
-                p.color = interpolateColor(this.colorPaletteGradient[i], this.colorPaletteGradient[i+1], localRatio);
-            }
-        });
-
-        this.particles = this.particles.filter(p => p.lifetime > 0);
-    }
-}
-
-// Variables Globales e Inicialización de VFXVec
+// Variables de estado global
 let width = 64, height = 64, colorMode = 'RGB', currentTool = 'pencil', currentColor = '#000000', globalAlpha = 1.0, brushSize = 1;
 let gridMode = 'none', undoStack = [], redoStack = []; 
 const MAX_HISTORY = 30;
 let activeEffectName = '';
-let activeLayerIndex = 0, layerCounter = 0, selectionMask = null, hasSelection = false;
+let layers = [], activeLayerIndex = 0, layerCounter = 0, selectionMask = null, hasSelection = false;
 let zoom = 1, panX = 0, panY = 0, isPanning = false, isDrawing = false, startX = 0, startY = 0, lastX = 0, lastY = 0;
 
 let symOn = false, symDir = 'V', symX = 32, symY = 32, isDraggingSym = false, isRectSelecting = false, isLassoing = false, lassoPoints = [], dashOffset = 0;
@@ -168,29 +41,7 @@ let isLightDragging = false;
 let effectBackupData = null; 
 let tiledModeOn = false;
 
-let uvTemplates = [];
-let activeUVTemplate = null;
-let showUVOverlay = false;
-let tempUVTemplate = { name: "", width: 64, height: 64, faces: [] };
-
-let isEditingUVManually = false;
-let uvSelectedFaceIndex = -1;
-let uvActiveHandle = null;
-let uvDragStartX = 0, uvDragStartY = 0;
-let uvInitFaceRect = { x: 0, y: 0, w: 0, h: 0 };
-let deletedDefaultTemplates = [];
-
-let lastManualSaveTime = 0;
-let isInitialBoot = true;
-let hoverX = -1, hoverY = -1;
-let isMouseOverCanvas = false;
-
-// Variables y Estados de la Línea de Tiempo y Física VFX
-let timeline = null;
-let emitters = [];
-let vectorField = null;
-let showForceField = true;
-
+// Referencias a Canvases y Elementos DOM
 const displayCanvas = document.getElementById('main-canvas');
 const bgCanvas = document.getElementById('bg-canvas');
 const selectionCanvas = document.getElementById('selection-canvas');
@@ -208,10 +59,10 @@ const workspace = document.getElementById('workspace');
 let palette = ['#000000','#1a1c2c','#5d275d','#b13e53','#ef7d57','#ffcd75','#a7f070','#38b764','#257179','#29366f','#3b5dc9','#41a6f6','#73eff7','#f4f4f4','#94b0c2','#566c86'];
 let selectedPaletteIndex = 0, installedPluginsList = [];
 
-// Diccionarios de Localización Adaptados
+// Diccionario de Traducción Extendido (ES/EN)
 const translations = {
     es: {
-        title: "VFXVec Pixelart Animation - VFX & Cinematic Studio",
+        title: "PiXVec - Editor Profesional de Pixel Art",
         symmetry: "Simetría",
         vertical: "Vertical",
         horizontal: "Horizontal",
@@ -255,7 +106,7 @@ const translations = {
         duplicate: "Duplicar",
         mergeDown: "Unir Abajo",
         delete: "Eliminar",
-        effectsTitle: "Acabados Cinematográficos",
+        effectsTitle: "Acabados",
         effectsGeo: "Geometría y Luces",
         effectsList: {
             mirror: "Espejo...",
@@ -314,14 +165,12 @@ const translations = {
             rect: "Rectángulo (U)",
             circle: "Círculo (C)",
             bucket: "Cubo de Relleno (B o F)",
-            picker: "Gotero (I)",
+            picker: "Gotero / Seleccionar Color (I)",
             magic: "Selección Inteligente (W)",
             rectSelect: "Selección Cuadrada",
             lassoSelect: "Selección Lazo",
             gradient: "Degradado (G)",
-            hand: "Mano / Mover (Espacio)",
-            forceBrush: "Pincel de Fuerza Vectorial",
-            emitterTool: "Añadir Emisor VFX"
+            hand: "Mano / Mover (Mantener Espacio)"
         },
         pestañas: {
             color: "Pintura",
@@ -330,7 +179,7 @@ const translations = {
         }
     },
     en: {
-        title: "VFXVec Pixelart Animation - VFX & Cinematic Studio",
+        title: "PiXVec - Professional Pixel Art Editor",
         symmetry: "Symmetry",
         vertical: "Vertical",
         horizontal: "Horizontal",
@@ -374,7 +223,7 @@ const translations = {
         duplicate: "Duplicate",
         mergeDown: "Merge Down",
         delete: "Delete",
-        effectsTitle: "Cinematic Post-Processing",
+        effectsTitle: "Post-Processing",
         effectsGeo: "Geometry & Lights",
         effectsList: {
             mirror: "Mirror...",
@@ -438,9 +287,7 @@ const translations = {
             rectSelect: "Marquee Selection",
             lassoSelect: "Lasso Selection",
             gradient: "Gradient (G)",
-            hand: "Hand / Pan (Hold Space)",
-            forceBrush: "Vector Force Brush",
-            emitterTool: "Add VFX Emitter"
+            hand: "Hand / Pan (Hold Space)"
         },
         pestañas: {
             color: "Painting",
@@ -451,48 +298,6 @@ const translations = {
 };
 
 let currentLanguage = 'es';
-
-function getActiveLayer() {
-    if (!timeline || !timeline.frames[timeline.currentFrameIndex]) return null;
-    return timeline.frames[timeline.currentFrameIndex].layers[activeLayerIndex];
-}
-
-function initVectorField() {
-    vectorField = new Float32Array(width * height * 2);
-}
-
-function manageFrameMemoryPool(currentIndex) {
-    const poolSize = 3; 
-    timeline.frames.forEach((f, idx) => {
-        const distance = Math.abs(idx - currentIndex);
-        if (distance <= poolSize) {
-            if (f.layers.length === 0 && f.serializedLayers.length > 0) {
-                f.deserialize();
-            }
-        } else {
-            if (f.layers.length > 0) {
-                f.serialize();
-            }
-        }
-    });
-}
-
-function selectFrame(index) {
-    if (index < 0 || index >= timeline.frames.length) return;
-    
-    manageFrameMemoryPool(index);
-    timeline.currentFrameIndex = index;
-    
-    const activeFrame = timeline.frames[timeline.currentFrameIndex];
-    if (activeLayerIndex >= activeFrame.layers.length) {
-        activeLayerIndex = activeFrame.layers.length - 1;
-    }
-    if (activeLayerIndex < 0) activeLayerIndex = 0;
-
-    renderLayersList();
-    renderComposite();
-    updateTimelineUI();
-}
 
 function toggleLanguage() {
     currentLanguage = (currentLanguage === 'es') ? 'en' : 'es';
@@ -603,6 +408,7 @@ function applyLanguage() {
 
     document.getElementById('label-title-shading').innerText = currentLanguage === 'es' ? "Pincel Sombreador" : "Shading Brush";
     document.getElementById('label-desc-shading').innerText = currentLanguage === 'es' ? "Pinta directamente brillos (+) o sombras (-)." : "Paint highlights (+) or shadows (-) directly.";
+    document.getElementById('label-title-ref').innerText = currentLanguage === 'es' ? "Imagen de Referencia" : "Reference Image";
 
     document.querySelectorAll('.tool-btn').forEach(btn => {
         const t = btn.dataset.tool;
@@ -656,7 +462,7 @@ function resizeUI() { uiCanvas.width=workspace.clientWidth; uiCanvas.height=work
 function loadPluginConfig() { if(!fs||!path||!os) return {}; try { const p=path.join(getAppDir(), 'plugins.json'); if(fs.existsSync(p)) return JSON.parse(fs.readFileSync(p, 'utf8')); }catch(e){} return {}; }
 function savePluginConfig(config) { if(!fs||!path||!os) return; try { fs.writeFileSync(path.join(getAppDir(), 'plugins.json'), JSON.stringify(config)); }catch(e){} }
 
-function initPlugins() { window.PiXVecAPI={ addToolButton:(h)=>document.getElementById('tools-container').insertAdjacentHTML('beforeend', h), getLayers:()=>timeline.frames[timeline.currentFrameIndex].layers, getActiveLayer:()=>getActiveLayer(), renderComposite:renderComposite, getDimensions:()=>({width, height}), showMessage:showMessage, drawPoint:(x,y,c,s,e)=>{if(getActiveLayer())drawPoint(getActiveLayer().ctx,x,y,c,s,e,false);}, drawLine:(x0,y0,x1,y1,c,s,e)=>{if(getActiveLayer())drawLine(getActiveLayer().ctx,x0,y0,x1,y1,c,s,e,false);}, drawRectOutline:(x0,y0,x1,y1,c,s,e)=>{if(getActiveLayer())drawRectOutline(getActiveLayer().ctx,x0,y0,x1,y1,c,s,e,false);}, drawCircle:(xc,yc,r,c,s,e)=>{if(getActiveLayer())drawCircle(getActiveLayer().ctx,xc,yc,r,c,s,e,false);}, getSymmetry:()=>({isOn:symOn,dir:symDir,x:symX,y:symY}) }; installedPluginsList=[]; let config=loadPluginConfig(); if(fs&&path&&os){ try { const dir=path.join(getAppDir(), 'plugins'); if(!fs.existsSync(dir)) fs.mkdirSync(dir); fs.readdirSync(dir).forEach(file=>{ if(file.endsWith('.js')){ const isActive=config[file]!==false; installedPluginsList.push({filename:file, active:isActive}); if(isActive) try { require(path.join(dir, file)); }catch(e){} } }); }catch(err){} } }
+function initPlugins() { window.PiXVecAPI={ addToolButton:(h)=>document.getElementById('tools-container').insertAdjacentHTML('beforeend', h), getLayers:()=>layers, getActiveLayer:()=>layers[activeLayerIndex], renderComposite:renderComposite, getDimensions:()=>({width, height}), showMessage:showMessage, drawPoint:(x,y,c,s,e)=>{if(layers[activeLayerIndex])drawPoint(layers[activeLayerIndex].ctx,x,y,c,s,e,false);}, drawLine:(x0,y0,x1,y1,c,s,e)=>{if(layers[activeLayerIndex])drawLine(layers[activeLayerIndex].ctx,x0,y0,x1,y1,c,s,e,false);}, drawRectOutline:(x0,y0,x1,y1,c,s,e)=>{if(layers[activeLayerIndex])drawRectOutline(layers[activeLayerIndex].ctx,x0,y0,x1,y1,c,s,e,false);}, drawCircle:(xc,yc,r,c,s,e)=>{if(layers[activeLayerIndex])drawCircle(layers[activeLayerIndex].ctx,xc,yc,r,c,s,e,false);}, getSymmetry:()=>({isOn:symOn,dir:symDir,x:symX,y:symY}) }; installedPluginsList=[]; let config=loadPluginConfig(); if(fs&&path&&os){ try { const dir=path.join(getAppDir(), 'plugins'); if(!fs.existsSync(dir)) fs.mkdirSync(dir); fs.readdirSync(dir).forEach(file=>{ if(file.endsWith('.js')){ const isActive=config[file]!==false; installedPluginsList.push({filename:file, active:isActive}); if(isActive) try { require(path.join(dir, file)); }catch(e){} } }); }catch(err){} } }
 function openPluginManager() { renderPluginList(); document.getElementById('modal-plugins').classList.remove('hidden'); }
 function renderPluginList() { const c=document.getElementById('plugins-list-container'); c.innerHTML=''; if(installedPluginsList.length===0) return; installedPluginsList.forEach((p, i)=>{ const d=document.createElement('div'); d.className='flex justify-between items-center bg-black p-3 rounded-lg border border-zinc-700 mb-2'; const t=document.createElement('button'); t.innerText=p.active?'ACTIVO':'INACTIVO'; t.className=`text-[10px] px-2 py-1 rounded font-bold w-20 ${p.active?'bg-green-600 text-white':'bg-zinc-700 text-zinc-350'}`; t.onclick=()=>togglePlugin(i); const n=document.createElement('span'); n.innerText=p.filename; n.className='text-sm font-mono text-zinc-200 flex-1 mx-3 truncate'; const x=document.createElement('button'); x.innerHTML='X'; x.className='text-zinc-500 hover:text-red-500 p-1 bg-zinc-800 rounded font-bold px-3'; x.onclick=()=>requestDeletePlugin(i); d.appendChild(t); d.appendChild(n); d.appendChild(x); c.appendChild(d); }); }
 function togglePlugin(i) { installedPluginsList[i].active=!installedPluginsList[i].active; let config=loadPluginConfig(); config[installedPluginsList[i].filename]=installedPluginsList[i].active; savePluginConfig(config); renderPluginList(); document.getElementById('plugin-restart-warning').classList.remove('hidden'); }
@@ -687,82 +493,36 @@ function init() {
     initPlugins(); 
     startAutoSave(); 
     generateHarmony(); 
-    loadUVTemplates();
     makeElementDraggable(document.getElementById('effect-settings-content'), document.getElementById('effect-settings-title'));
     makeElementDraggable(document.getElementById('native-vol-content'), document.getElementById('modal-title-vol3d'));
     makeElementDraggable(document.getElementById('native-light-content'), document.getElementById('modal-title-lights'));
     
-    const loadBtn = document.getElementById('btn-load');
-    if (loadBtn) {
-        loadBtn.removeAttribute('onclick');
-        loadBtn.onclick = triggerLoadProject;
-    }
-
+    // Listeners del nuevo Tinte de Capas
     document.getElementById('layer-tint-color')?.addEventListener('input', (e) => {
-        const al = getActiveLayer();
-        if (al) {
-            al.tintColor = e.target.value;
+        if (layers[activeLayerIndex]) {
+            layers[activeLayerIndex].tintColor = e.target.value;
             renderComposite();
         }
     });
     document.getElementById('layer-tint-factor')?.addEventListener('input', (e) => {
         let val = parseFloat(e.target.value);
         document.getElementById('layer-tint-factor-display').innerText = Math.round(val * 100) + '%';
-        const al = getActiveLayer();
-        if (al) {
-            al.tintFactor = val;
+        if (layers[activeLayerIndex]) {
+            layers[activeLayerIndex].tintFactor = val;
             renderComposite();
         }
     });
 
     workspace.focus(); 
     requestAnimationFrame(animLoop); 
-    isInitialBoot = false; 
 }
 
-// Bucle de Animación basado en Delta-Time preciso y FPS constantes
-let lastTime = 0;
-let accumulator = 0;
-
-function animLoop(timestamp) { 
-    if (!lastTime) lastTime = timestamp;
-    let delta = timestamp - lastTime;
-    lastTime = timestamp;
-
+function animLoop() { 
     dashOffset++; 
-    
     if(uiCanvas.width!==workspace.clientWidth || uiCanvas.height!==workspace.clientHeight) { 
         uiCanvas.width=workspace.clientWidth; 
         uiCanvas.height=workspace.clientHeight; 
     } 
-
-    if (timeline && timeline.isPlaying) {
-        accumulator += delta;
-        const frameDuration = 1000 / timeline.fps;
-        if (accumulator >= frameDuration) {
-            let nextIdx = timeline.currentFrameIndex + 1;
-            if (nextIdx >= timeline.frames.length) {
-                if (timeline.loop) {
-                    nextIdx = 0;
-                } else {
-                    nextIdx = timeline.frames.length - 1;
-                    timeline.isPlaying = false;
-                }
-            }
-            if (timeline.isPlaying) {
-                selectFrame(nextIdx);
-            }
-            accumulator -= frameDuration;
-        }
-    }
-
-    emitters.forEach(e => {
-        if (timeline && timeline.isPlaying) {
-            e.emit();
-        }
-        e.update(vectorField);
-    });
-
     drawOverlays(); 
     requestAnimationFrame(animLoop); 
 }
@@ -782,11 +542,9 @@ function setSymmetryMode(dir) {
 function getBoundsMask(w, h, data) { let minX=w, minY=h, maxX=-1, maxY=-1; for(let y=0; y<h; y++) for(let x=0; x<w; x++) if(data[y*w+x]){ if(x<minX) minX=x; if(x>maxX) maxX=x; if(y<minY) minY=y; if(y>maxY) maxY=y; } if(maxX<0) return null; return {x:minX, y:minY, w:maxX-minX+1, h:maxY-minY+1}; }
 
 function initTransform(tempCanvas, extractFromMask=false, shapeType='raster') {
-    const actLayer = getActiveLayer();
-    if (!actLayer) return;
     if(extractFromMask && selectionMask) {
         let b=getBoundsMask(width, height, selectionMask); if(!b) return;
-        tfCanvas.width=b.w; tfCanvas.height=b.h; let tCtx=tfCanvas.getContext('2d'), actCtx=actLayer.ctx; tCtx.imageSmoothingEnabled=false;
+        tfCanvas.width=b.w; tfCanvas.height=b.h; let tCtx=tfCanvas.getContext('2d'), actCtx=layers[activeLayerIndex].ctx; tCtx.imageSmoothingEnabled=false;
         let sData=actCtx.getImageData(b.x, b.y, b.w, b.h), tData=tCtx.createImageData(b.w, b.h);
         for(let y=0; y<b.h; y++){ for(let x=0; x<b.w; x++){ if(selectionMask[((b.y+y)*width+(b.x+x))]) { let idx=(y*b.w+x)*4; tData.data[idx]=sData.data[idx]; tData.data[idx+1]=sData.data[idx+1]; tData.data[idx+2]=sData.data[idx+2]; tData.data[idx+3]=sData.data[idx+3]; sData.data[idx+3]=0; } } }
         tCtx.putImageData(tData, 0, 0); actCtx.putImageData(sData, b.x, b.y); tfX=b.x; tfY=b.y; tfW=b.w; tfH=b.h; tfType='raster'; selectionCtx.clearRect(0,0,width,height); renderComposite();
@@ -814,8 +572,7 @@ function customDrawImage(ctx, srcCanvas, cx, cy, w, h, angle, alpha) {
 }
 
 function commitTransform() {
-    const actLayer = getActiveLayer();
-    if(!isTransforming || !actLayer) return; saveState(); let ctx=actLayer.ctx; ctx.save();
+    if(!isTransforming) return; saveState(); let ctx=layers[activeLayerIndex].ctx; ctx.save();
     let absW = Math.abs(tfW), absH = Math.abs(tfH);
     if(absW < 0.1) tfW = tfW < 0 ? -0.1 : 0.1;
     if(absH < 0.1) tfH = tfH < 0 ? -0.1 : 0.1;
@@ -840,6 +597,7 @@ function transformHitTest(rawX, rawY) {
     return null;
 }
 
+// Lógica Isométrica Auxiliar
 function snapToIsometric(x0, y0, x1, y1) {
     let dx = x1 - x0;
     let dy = y1 - y0;
@@ -848,13 +606,13 @@ function snapToIsometric(x0, y0, x1, y1) {
     let angle = Math.atan2(dy, dx);
     let targets = [
         0,
-        26.565 * Math.PI / 180, 
+        26.565 * Math.PI / 180,  // Proporción 2:1 derecha-abajo
         90 * Math.PI / 180,
-        153.435 * Math.PI / 180, 
+        153.435 * Math.PI / 180, // Proporción 2:1 izquierda-abajo
         Math.PI,
-        -153.435 * Math.PI / 180,
+        -153.435 * Math.PI / 180,// Proporción 2:1 izquierda-arriba
         -90 * Math.PI / 180,
-        -26.565 * Math.PI / 180  
+        -26.565 * Math.PI / 180  // Proporción 2:1 derecha-arriba
     ];
     
     let bestAngle = targets[0];
@@ -872,38 +630,6 @@ function snapToIsometric(x0, y0, x1, y1) {
     let snappedX = x0 + Math.round(Math.cos(bestAngle) * length);
     let snappedY = y0 + Math.round(Math.sin(bestAngle) * length);
     return { x: snappedX, y: snappedY };
-}
-
-function drawFrameWithTint(frame, color) {
-    const tempC = document.createElement('canvas');
-    tempC.width = width;
-    tempC.height = height;
-    const tempCtx = tempC.getContext('2d');
-    tempCtx.imageSmoothingEnabled = false;
-
-    const layersToDraw = frame.layers.length > 0 ? frame.layers : frame.serializedLayers;
-    layersToDraw.forEach(l => {
-        if (l.visible) {
-            tempCtx.globalAlpha = l.opacity;
-            tempCtx.globalCompositeOperation = l.blendMode;
-            if (frame.layers.length > 0) {
-                tempCtx.drawImage(l.canvas, 0, 0);
-            } else if (l.pixels) {
-                const imgData = tempCtx.createImageData(width, height);
-                imgData.data.set(l.pixels);
-                const tempLayerCanvas = document.createElement('canvas');
-                tempLayerCanvas.width = width;
-                tempLayerCanvas.height = height;
-                tempLayerCanvas.getContext('2d').putImageData(imgData, 0, 0);
-                tempCtx.drawImage(tempLayerCanvas, 0, 0);
-            }
-        }
-    });
-
-    tempCtx.globalCompositeOperation = 'source-in';
-    tempCtx.fillStyle = color;
-    tempCtx.fillRect(0, 0, width, height);
-    uiCtx.drawImage(tempC, 0, 0);
 }
 
 function drawOverlays() {
@@ -952,60 +678,7 @@ function drawOverlays() {
         uiCtx.restore();
     }
 
-    // Dibujo de Onion Skin (Papel Cebolla)
-    if (timeline && timeline.onionSkinOn) {
-        uiCtx.save();
-        const prevIdx = timeline.currentFrameIndex - 1;
-        if (prevIdx >= 0) {
-            const prevFrame = timeline.frames[prevIdx];
-            if (prevFrame) {
-                uiCtx.globalAlpha = 0.35;
-                drawFrameWithTint(prevFrame, '#3b82f6'); // Tono frío para el pasado
-            }
-        }
-        const nextIdx = timeline.currentFrameIndex + 1;
-        if (nextIdx < timeline.frames.length) {
-            const nextFrame = timeline.frames[nextIdx];
-            if (nextFrame) {
-                uiCtx.globalAlpha = 0.35;
-                drawFrameWithTint(nextFrame, '#ef4444'); // Tono cálido para el futuro
-            }
-        }
-        uiCtx.restore();
-    }
-
-    // Dibujo de vectores de fuerza activos
-    if (showForceField && currentTool === 'forceBrush' && vectorField) {
-        uiCtx.save();
-        uiCtx.strokeStyle = 'rgba(59, 130, 246, 0.45)';
-        uiCtx.lineWidth = 0.5 / zoom;
-        const step = 4;
-        for (let y = 0; y < height; y += step) {
-            for (let x = 0; x < width; x += step) {
-                const idx = (y * width + x) * 2;
-                const fx = vectorField[idx];
-                const fy = vectorField[idx + 1];
-                if (Math.hypot(fx, fy) > 0.01) {
-                    uiCtx.beginPath();
-                    uiCtx.moveTo(x, y);
-                    uiCtx.lineTo(x + fx * 2.5, y + fy * 2.5);
-                    uiCtx.stroke();
-                }
-            }
-        }
-        uiCtx.restore();
-    }
-
-    // Dibujo de partículas en overlay
-    uiCtx.save();
-    emitters.forEach(e => {
-        e.particles.forEach(p => {
-            uiCtx.fillStyle = p.color;
-            uiCtx.fillRect(Math.floor(p.x), Math.floor(p.y), 1, 1);
-        });
-    });
-    uiCtx.restore();
-
+    // Renderizador de Guías de Perspectiva Pro (Novedad Pro Tools 1)
     let perspectiveOn = document.getElementById('chk-perspective-guides')?.checked;
     if (perspectiveOn) {
         let vx = parseFloat(document.getElementById('perspective-vx').value) || width / 2;
@@ -1031,72 +704,6 @@ function drawOverlays() {
         uiCtx.beginPath();
         uiCtx.arc(vx, vy, 3 / zoom, 0, Math.PI * 2);
         uiCtx.stroke();
-        uiCtx.restore();
-    }
-
-    if (isEditingUVManually && tempUVTemplate) {
-        uiCtx.save();
-        tempUVTemplate.faces.forEach((face, idx) => {
-            const isSelected = (idx === uvSelectedFaceIndex);
-            uiCtx.strokeStyle = face.color || '#3b82f6';
-            uiCtx.lineWidth = isSelected ? (1.5 / zoom) : (0.5 / zoom);
-            if (isSelected) {
-                uiCtx.setLineDash([2 / zoom, 2 / zoom]);
-            } else {
-                uiCtx.setLineDash([]);
-            }
-            uiCtx.strokeRect(face.x, face.y, face.w, face.h);
-            
-            uiCtx.fillStyle = face.color || '#3b82f6';
-            uiCtx.font = `${Math.max(5, 7 / zoom)}px monospace`;
-            uiCtx.fillText(face.name, face.x + 1 / zoom, face.y + Math.max(5, 7 / zoom));
-            
-            if (isSelected) {
-                uiCtx.fillStyle = '#ffffff';
-                uiCtx.strokeStyle = face.color || '#3b82f6';
-                uiCtx.lineWidth = 0.5 / zoom;
-                uiCtx.setLineDash([]);
-                const hs = 4 / zoom;
-                const pts = [
-                    [face.x, face.y],
-                    [face.x + face.w, face.y],
-                    [face.x, face.y + face.h],
-                    [face.x + face.w, face.y + face.h]
-                ];
-                pts.forEach(p => {
-                    uiCtx.fillRect(p[0] - hs / 2, p[1] - hs / 2, hs, hs);
-                    uiCtx.strokeRect(p[0] - hs / 2, p[1] - hs / 2, hs, hs);
-                });
-            }
-        });
-        uiCtx.restore();
-    } else if (showUVOverlay && activeUVTemplate) {
-        uiCtx.save();
-        const adapted = getAdaptedUVTemplate(activeUVTemplate);
-        if (adapted) {
-            adapted.faces.forEach(face => {
-                uiCtx.strokeStyle = face.color || '#3b82f6';
-                uiCtx.lineWidth = 0.5 / zoom; 
-                uiCtx.strokeRect(face.x, face.y, face.w, face.h);
-                
-                uiCtx.fillStyle = face.color || '#3b82f6';
-                uiCtx.font = `${Math.max(5, 7 / zoom)}px monospace`;
-                uiCtx.fillText(face.name, face.x + 1 / zoom, face.y + Math.max(5, 7 / zoom));
-            });
-        }
-        uiCtx.restore();
-    }
-
-    if (isMouseOverCanvas && !isDrawing && (currentTool === 'pencil' || currentTool === 'eraser')) {
-        uiCtx.save();
-        uiCtx.strokeStyle = '#3b82f6'; 
-        uiCtx.lineWidth = 0.5 / zoom;    
-        
-        const offset = Math.floor(brushSize / 2);
-        const px = hoverX - offset;
-        const py = hoverY - offset;
-        
-        uiCtx.strokeRect(px, py, brushSize, brushSize);
         uiCtx.restore();
     }
 
@@ -1150,104 +757,30 @@ function createLayer(name) {
     }; 
 }
 
-function addLayer() { 
-    saveState(); 
-    const frame = timeline.frames[timeline.currentFrameIndex];
-    frame.layers.push(createLayer(currentLanguage === 'es' ? `Capa ${layerCounter}` : `Layer ${layerCounter}`)); 
-    activeLayerIndex = frame.layers.length - 1; 
-    renderLayersList(); 
-    renderComposite(); 
-}
-
-function deleteActiveLayer() { 
-    const frame = timeline.frames[timeline.currentFrameIndex];
-    if(!frame || frame.layers.length <= 1) return; 
-    saveState(); 
-    frame.layers.splice(activeLayerIndex, 1); 
-    activeLayerIndex = Math.max(0, activeLayerIndex - 1); 
-    renderLayersList(); 
-    renderComposite(); 
-}
-
-function duplicateLayer() { 
-    saveState(); 
-    const frame = timeline.frames[timeline.currentFrameIndex];
-    let source = frame.layers[activeLayerIndex]; 
-    if(!source) return;
-    let nl = createLayer(source.name + (currentLanguage === 'es' ? " copia" : " copy")); 
-    nl.opacity = source.opacity; 
-    nl.blendMode = source.blendMode; 
-    nl.tintColor = source.tintColor || '#3b82f6'; 
-    nl.tintFactor = source.tintFactor || 0.0; 
-    nl.ctx.drawImage(source.canvas, 0, 0); 
-    frame.layers.splice(activeLayerIndex + 1, 0, nl); 
-    activeLayerIndex++; 
-    renderLayersList(); 
-    renderComposite(); 
-}
-
-function mergeLayerDown() { 
-    if(activeLayerIndex > 0) { 
-        saveState(); 
-        const frame = timeline.frames[timeline.currentFrameIndex];
-        let target = frame.layers[activeLayerIndex-1], source = frame.layers[activeLayerIndex]; 
-        target.ctx.globalAlpha = source.opacity; 
-        target.ctx.globalCompositeOperation = source.blendMode; 
-        target.ctx.drawImage(source.canvas, 0, 0); 
-        target.ctx.globalAlpha = 1.0; 
-        target.ctx.globalCompositeOperation = 'source-over'; 
-        frame.layers.splice(activeLayerIndex, 1); 
-        activeLayerIndex--; 
-        renderLayersList(); 
-        renderComposite(); 
-        updateActiveLayerPreview(); 
-    } 
-}
-
-function toggleLayerVisibility(index) { 
-    const frame = timeline.frames[timeline.currentFrameIndex];
-    if (frame && frame.layers[index]) {
-        frame.layers[index].visible = !frame.layers[index].visible; 
-        renderLayersList(); 
-        renderComposite(); 
-    }
-}
-
+function addLayer() { saveState(); layers.push(createLayer(currentLanguage === 'es' ? `Capa ${layerCounter}` : `Layer ${layerCounter}`)); activeLayerIndex = layers.length - 1; renderLayersList(); renderComposite(); }
+function deleteActiveLayer() { if(layers.length <= 1) return; saveState(); layers.splice(activeLayerIndex, 1); activeLayerIndex = Math.max(0, activeLayerIndex - 1); renderLayersList(); renderComposite(); }
+function duplicateLayer() { saveState(); let source = layers[activeLayerIndex], nl = createLayer(source.name + (currentLanguage === 'es' ? " copia" : " copy")); nl.opacity = source.opacity; nl.blendMode = source.blendMode; nl.tintColor = source.tintColor || '#3b82f6'; nl.tintFactor = source.tintFactor || 0.0; nl.ctx.drawImage(source.canvas, 0, 0); layers.splice(activeLayerIndex + 1, 0, nl); activeLayerIndex++; renderLayersList(); renderComposite(); }
+function mergeLayerDown() { if(activeLayerIndex > 0) { saveState(); let target = layers[activeLayerIndex-1], source = layers[activeLayerIndex]; target.ctx.globalAlpha = source.opacity; target.ctx.globalCompositeOperation = source.blendMode; target.ctx.drawImage(source.canvas, 0, 0); target.ctx.globalAlpha = 1.0; target.ctx.globalCompositeOperation = 'source-over'; layers.splice(activeLayerIndex, 1); activeLayerIndex--; renderLayersList(); renderComposite(); updateActiveLayerPreview(); } }
+function toggleLayerVisibility(index) { layers[index].visible = !layers[index].visible; renderLayersList(); renderComposite(); }
 function setActiveLayer(index) { activeLayerIndex = index; renderLayersList(); }
-function updateLayerProps() { if(!getActiveLayer()) return; saveState(); getActiveLayer().blendMode = document.getElementById('layer-blend').value; getActiveLayer().opacity = parseFloat(document.getElementById('layer-opacity').value); renderComposite(); }
-
-function moveLayer(index, dir) { 
-    const frame = timeline.frames[timeline.currentFrameIndex];
-    if (!frame || index + dir < 0 || index + dir >= frame.layers.length) return; 
-    saveState(); 
-    const temp = frame.layers[index]; 
-    frame.layers[index] = frame.layers[index + dir]; 
-    frame.layers[index + dir] = temp; 
-    if (activeLayerIndex === index) activeLayerIndex = index + dir; 
-    else if (activeLayerIndex === index + dir) activeLayerIndex = index; 
-    renderLayersList(); 
-    renderComposite(); 
-}
+function updateLayerProps() { if(!layers[activeLayerIndex]) return; saveState(); layers[activeLayerIndex].blendMode = document.getElementById('layer-blend').value; layers[activeLayerIndex].opacity = parseFloat(document.getElementById('layer-opacity').value); renderComposite(); }
+function moveLayer(index, dir) { if (index + dir < 0 || index + dir >= layers.length) return; saveState(); const temp = layers[index]; layers[index] = layers[index + dir]; layers[index + dir] = temp; if (activeLayerIndex === index) activeLayerIndex = index + dir; else if (activeLayerIndex === index + dir) activeLayerIndex = index; renderLayersList(); renderComposite(); }
 
 function renderLayersList() { 
     const container = document.getElementById('layers-list'); 
     container.innerHTML = ''; 
-    const frame = timeline.frames[timeline.currentFrameIndex];
-    if(!frame) return;
-
-    const activeLayer = frame.layers[activeLayerIndex];
-    if(activeLayer) { 
-        document.getElementById('layer-blend').value = activeLayer.blendMode; 
-        document.getElementById('layer-opacity').value = activeLayer.opacity; 
+    if(layers[activeLayerIndex]) { 
+        document.getElementById('layer-blend').value = layers[activeLayerIndex].blendMode; 
+        document.getElementById('layer-opacity').value = layers[activeLayerIndex].opacity; 
         
         let tCol = document.getElementById('layer-tint-color');
         let tFac = document.getElementById('layer-tint-factor');
         let tDisp = document.getElementById('layer-tint-factor-display');
-        if (tCol) tCol.value = activeLayer.tintColor || '#3b82f6';
-        if (tFac) tFac.value = activeLayer.tintFactor || 0.0;
-        if (tDisp) tDisp.innerText = Math.round((activeLayer.tintFactor || 0.0) * 100) + '%';
+        if (tCol) tCol.value = layers[activeLayerIndex].tintColor || '#3b82f6';
+        if (tFac) tFac.value = layers[activeLayerIndex].tintFactor || 0.0;
+        if (tDisp) tDisp.innerText = Math.round((layers[activeLayerIndex].tintFactor || 0.0) * 100) + '%';
     } 
-    frame.layers.forEach((layer, index) => { 
+    layers.forEach((layer, index) => { 
         const div = document.createElement('div'); 
         div.className = `layer-item flex items-center p-2 rounded-xl cursor-pointer border ${index === activeLayerIndex ? 'active' : 'bg-zinc-950 border-zinc-850 hover:bg-zinc-900'}`; 
         const visBtn = document.createElement('button'); 
@@ -1287,8 +820,8 @@ function renderLayersList() {
         arrowsContainer.className = 'flex flex-col ml-2 shrink-0 border-l border-zinc-800 pl-2 justify-center gap-[2px]'; 
         const btnUp = document.createElement('button'); 
         btnUp.innerHTML = '▲'; 
-        btnUp.className = `leading-none text-[10px] ${index===frame.layers.length-1?'text-zinc-700 cursor-not-allowed':'text-zinc-400 hover:text-blue-400'}`; 
-        btnUp.disabled = index===frame.layers.length-1; 
+        btnUp.className = `leading-none text-[10px] ${index===layers.length-1?'text-zinc-700 cursor-not-allowed':'text-zinc-400 hover:text-blue-400'}`; 
+        btnUp.disabled = index===layers.length-1; 
         btnUp.onclick = (e) => { e.stopPropagation(); moveLayer(index, 1); }; 
         const btnDown = document.createElement('button'); 
         btnDown.innerHTML = '▼'; 
@@ -1306,18 +839,17 @@ function renderLayersList() {
     }); 
 }
 
-function updateActiveLayerPreview() { if(!getActiveLayer()) return; const thumb = document.getElementById(`layer-preview-${getActiveLayer().id}`); if(thumb) { const pCtx = thumb.getContext('2d'); pCtx.clearRect(0,0,32,32); pCtx.imageSmoothingEnabled = false; const scale = Math.min(32/width, 32/height), dw = width*scale, dh = height*scale, dx = (32-dw)/2, dy = (32-dh)/2; pCtx.drawImage(getActiveLayer().canvas, 0, 0, width, height, dx, dy, dw, dh); } }
+function updateActiveLayerPreview() { if(!layers[activeLayerIndex]) return; const thumb = document.getElementById(`layer-preview-${layers[activeLayerIndex].id}`); if(thumb) { const pCtx = thumb.getContext('2d'); pCtx.clearRect(0,0,32,32); pCtx.imageSmoothingEnabled = false; const scale = Math.min(32/width, 32/height), dw = width*scale, dh = height*scale, dx = (32-dw)/2, dy = (32-dh)/2; pCtx.drawImage(layers[activeLayerIndex].canvas, 0, 0, width, height, dx, dy, dw, dh); } }
 
 function renderComposite() { 
     displayCtx.clearRect(0, 0, width, height); 
-    const frame = timeline.frames[timeline.currentFrameIndex];
-    if (!frame) return;
-
-    frame.layers.forEach(layer => { 
+    
+    layers.forEach(layer => { 
         if(layer.visible) { 
             displayCtx.globalAlpha = layer.opacity; 
             displayCtx.globalCompositeOperation = layer.blendMode; 
             
+            // Renderizado de Tinte No Destructivo (Novedad Capas)
             if (layer.tintFactor && layer.tintFactor > 0) {
                 let tempC = document.createElement('canvas');
                 tempC.width = width;
@@ -1340,8 +872,9 @@ function renderComposite() {
     displayCtx.globalCompositeOperation = 'source-over'; 
 }
 
+// Métodos Destructivos de Procesamiento de Capa (Novedad Capas)
 function applyLayerGrayscale() {
-    let layer = getActiveLayer();
+    let layer = layers[activeLayerIndex];
     if (!layer) return;
     saveState();
     let ctx = layer.ctx;
@@ -1361,7 +894,7 @@ function applyLayerGrayscale() {
 }
 
 function applyLayerInvert() {
-    let layer = getActiveLayer();
+    let layer = layers[activeLayerIndex];
     if (!layer) return;
     saveState();
     let ctx = layer.ctx;
@@ -1450,16 +983,13 @@ function exportSVG() {
     compCanvas.height = height;
     const compCtx = compCanvas.getContext('2d');
     
-    const activeFrame = timeline.frames[timeline.currentFrameIndex];
-    if (activeFrame) {
-        activeFrame.layers.forEach(l => {
-            if(l.visible) {
-                compCtx.globalAlpha = l.opacity;
-                compCtx.globalCompositeOperation = l.blendMode;
-                compCtx.drawImage(l.canvas, 0, 0);
-            }
-        });
-    }
+    layers.forEach(l => {
+        if(l.visible) {
+            compCtx.globalAlpha = l.opacity;
+            compCtx.globalCompositeOperation = l.blendMode;
+            compCtx.drawImage(l.canvas, 0, 0);
+        }
+    });
     
     const imgData = compCtx.getImageData(0, 0, width, height).data;
     for (let y = 0; y < height; y++) {
@@ -1500,10 +1030,40 @@ function exportPaletteCSS() {
     URL.revokeObjectURL(u);
 }
 
+document.getElementById('ref-image-upload').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        const img = document.getElementById('ref-image-element');
+        img.src = event.target.result;
+        img.classList.remove('hidden');
+        updateRefParams();
+    };
+    reader.readAsDataURL(file);
+});
+
+function clearReferenceImage() {
+    const img = document.getElementById('ref-image-element');
+    img.src = '';
+    img.classList.add('hidden');
+    document.getElementById('ref-image-upload').value = '';
+}
+
+function updateRefParams() {
+    const img = document.getElementById('ref-image-element');
+    const opacity = document.getElementById('ref-opacity').value;
+    const scale = document.getElementById('ref-scale').value;
+    
+    img.style.opacity = opacity;
+    img.style.transform = `scale(${scale})`;
+    
+    document.getElementById('ref-opac-disp').innerText = Math.round(opacity * 100) + '%';
+    document.getElementById('ref-scale-disp').innerText = scale + 'x';
+}
+
 function analyzePalette() {
-    const actLayer = getActiveLayer();
-    if (!actLayer) return;
-    const activeCtx = actLayer.ctx;
+    const activeCtx = layers[activeLayerIndex].ctx;
     const imgData = activeCtx.getImageData(0, 0, width, height).data;
     let uniqueColors = new Set();
     for (let i = 0; i < imgData.length; i += 4) {
@@ -1528,8 +1088,8 @@ function analyzePalette() {
     
     if (tooClose.length > 0) {
         let msg = currentLanguage === 'es' ? 
-            `¡Análisis Completo! Se han detectado ${tooClose.length} pares de colores muy parecidos que podrían ensuciar tu Pixel Art.` :
-            `Analysis Complete! Detected ${tooClose.length} pairs of color tones that are extremely close and might muddy your art.`;
+            `¡Análisis Completo! Se han detectado ${tooClose.length} pares de colores muy parecidos que podrían ensuciar tu Pixel Art. Te recomendamos unificar tonos para un acabado limpio.` :
+            `Analysis Complete! Detected ${tooClose.length} pairs of color tones that are extremely close and might muddy your Pixel Art. We recommend merging them.`;
         showMessage(msg);
     } else {
         showMessage(currentLanguage === 'es' ? "¡Felicidades! Tu paleta de colores activa es completamente limpia y consistente." : "Great! Your active palette is highly optimized and clean.");
@@ -1538,8 +1098,7 @@ function analyzePalette() {
 
 function applySilhouetteInline() {
     saveState();
-    const layer = getActiveLayer();
-    if (!layer) return;
+    const layer = layers[activeLayerIndex];
     const ctx = layer.ctx;
     const imgData = ctx.getImageData(0, 0, width, height);
     const data = imgData.data;
@@ -1577,6 +1136,48 @@ function applySilhouetteInline() {
     updateActiveLayerPreview();
 }
 
+// Algoritmo de Limpieza Anti-Jaggies de Capa Completa (Novedad Pro Tools 2)
+function applyCleanDoubles() {
+    let layer = layers[activeLayerIndex];
+    if (!layer) return;
+    saveState();
+    let ctx = layer.ctx;
+    let imgData = ctx.getImageData(0, 0, width, height);
+    let data = imgData.data;
+    let temp = new Uint8ClampedArray(data);
+    
+    let getAlpha = (x, y) => {
+        if (x < 0 || x >= width || y < 0 || y >= height) return 0;
+        return temp[((y * width) + x) * 4 + 3];
+    };
+    
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            let idx = (y * width + x) * 4;
+            if (temp[idx + 3] > 0) {
+                let n  = getAlpha(x, y - 1) > 0;
+                let s  = getAlpha(x, y + 1) > 0;
+                let e  = getAlpha(x + 1, y) > 0;
+                let w  = getAlpha(x - 1, y) > 0;
+                
+                let nw = getAlpha(x - 1, y - 1) > 0;
+                let ne = getAlpha(x + 1, y - 1) > 0;
+                let sw = getAlpha(x - 1, y + 1) > 0;
+                let se = getAlpha(x + 1, y + 1) > 0;
+                
+                // Reconocer esquinas diagonales dobles redundantes en la línea
+                if (n && e && !ne && !w && !s) { data[idx + 3] = 0; }
+                else if (n && w && !nw && !e && !s) { data[idx + 3] = 0; }
+                else if (s && e && !se && !w && !n) { data[idx + 3] = 0; }
+                else if (s && w && !sw && !e && !n) { data[idx + 3] = 0; }
+            }
+        }
+    }
+    ctx.putImageData(imgData, 0, 0);
+    renderComposite();
+    updateActiveLayerPreview();
+}
+
 function hexToHsl(hex) {
     let rgb = hexToRgb(hex);
     let r = rgb.r / 255, g = rgb.g / 255, b = rgb.b / 255;
@@ -1602,7 +1203,8 @@ function hslToHex(h, s, l) {
         const hue2rgb = (p, q, t) => {
             if (t < 0) t += 1; if (t > 1) t -= 1;
             if (t < 1/6) return p + (q - p) * 6 * t;
-            if (t < 1/2) return p + (q - p) * (2/3 - t) * 6;
+            if (t < 1/2) return q;
+            if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
             return p;
         };
         let q = l < 0.5 ? l * (1 + s) : l + s - l * s;
@@ -1682,8 +1284,7 @@ function getBresenhamPoints(x0, y0, x1, y1) {
 
 function saveState() { 
     if (undoStack.length >= MAX_HISTORY) undoStack.shift(); 
-    const activeFrame = timeline.frames[timeline.currentFrameIndex];
-    const frameState = activeFrame.layers.map(l => ({ 
+    const state = layers.map(l => ({ 
         name: l.name, 
         visible: l.visible, 
         opacity: l.opacity, 
@@ -1692,19 +1293,13 @@ function saveState() {
         tintFactor: l.tintFactor,
         imgData: l.ctx.getImageData(0, 0, width, height) 
     })); 
-    undoStack.push({ 
-        frameIndex: timeline.currentFrameIndex,
-        state: frameState, 
-        activeIdx: activeLayerIndex 
-    }); 
+    undoStack.push({ state, activeIdx: activeLayerIndex }); 
     redoStack = []; 
     updateHistoryUI(); 
 }
 
 function loadState(historyItem) { 
-    timeline.currentFrameIndex = historyItem.frameIndex;
-    const activeFrame = timeline.frames[timeline.currentFrameIndex];
-    activeFrame.layers = historyItem.state.map((s, i) => { 
+    layers = historyItem.state.map((s, i) => { 
         const l = createLayer(s.name); 
         l.id = i; 
         l.visible = s.visible; 
@@ -1716,16 +1311,15 @@ function loadState(historyItem) {
         return l; 
     }); 
     activeLayerIndex = historyItem.activeIdx; 
+    layerCounter = layers.length; 
     renderLayersList(); 
     renderComposite(); 
 }
 
 function undo() { 
     if (undoStack.length === 0) return; 
-    const activeFrame = timeline.frames[timeline.currentFrameIndex];
     redoStack.push({ 
-        frameIndex: timeline.currentFrameIndex,
-        state: activeFrame.layers.map(l => ({ 
+        state: layers.map(l => ({ 
             name: l.name, 
             visible: l.visible, 
             opacity: l.opacity, 
@@ -1742,10 +1336,8 @@ function undo() {
 
 function redo() { 
     if (redoStack.length === 0) return; 
-    const activeFrame = timeline.frames[timeline.currentFrameIndex];
     undoStack.push({ 
-        frameIndex: timeline.currentFrameIndex,
-        state: activeFrame.layers.map(l => ({ 
+        state: layers.map(l => ({ 
             name: l.name, 
             visible: l.visible, 
             opacity: l.opacity, 
@@ -1786,59 +1378,20 @@ function showMessage(msg) { document.getElementById('message-text').innerText = 
 function closeModal(id) { document.getElementById(id).classList.add('hidden'); workspace.focus(); }
 function showNewProjectModal() { document.getElementById('modal-new-project').classList.remove('hidden'); }
 
-function needsSaveConfirmation() {
-    if (isInitialBoot) return false;
-    if (Date.now() - lastManualSaveTime < 5 * 60 * 1000) {
-        return false;
-    }
-    return true;
-}
-
-function confirmUnsavedChanges(onConfirm) {
-    if (!needsSaveConfirmation()) {
-        onConfirm();
-        return;
-    }
-    const text = currentLanguage === 'es' ? 
-        "Tienes cambios sin guardar. ¿Seguro que quieres continuar y perder el progreso actual?" : 
-        "You have unsaved changes. Are you sure you want to proceed and lose current progress?";
-    
-    document.getElementById('confirm-text').innerText = text;
-    document.getElementById('confirm-btn-yes').onclick = () => {
-        closeModal('modal-confirm');
-        onConfirm();
-    };
-    document.getElementById('modal-confirm').classList.remove('hidden');
-}
-
 function createNewProject() { 
-    confirmUnsavedChanges(() => {
-        executeCreateNewProject();
-    });
-}
-
-function executeCreateNewProject() {
     width = parseInt(document.getElementById('proj-width').value) || 64; 
     height = parseInt(document.getElementById('proj-height').value) || 64; 
     colorMode = document.getElementById('proj-mode').value; 
     [bgCanvas, displayCanvas, selectionCanvas, previewCanvas, uiCanvas].forEach(c => { c.width = width; c.height = height; }); 
     selectionMask = new Uint8Array(width * height); 
-    
-    timeline = new PixelTimeline();
-    const initialFrame = new PixelFrame(width, height);
-    initialFrame.layers.push(createLayer(currentLanguage === 'es' ? 'Fondo' : 'Background'));
-    timeline.frames.push(initialFrame);
-    timeline.currentFrameIndex = 0;
-    
+    layers = []; 
+    layerCounter = 0; 
+    layers.push(createLayer(currentLanguage === 'es' ? 'Fondo' : 'Background')); 
     activeLayerIndex = 0; 
     symOn = false; symX = width/2; symY = height/2; isTransforming = false; 
-    emitters = [];
-    initVectorField();
-
     document.getElementById('btn-commit-tf').classList.add('hidden'); 
     cancelSelection(); clearHistory(); closeModal('modal-new-project'); 
-    renderLayersList(); renderComposite(); centerCanvas(); updateStatusProjectMeta(); updateTimelineUI();
-    lastManualSaveTime = 0; 
+    renderLayersList(); renderComposite(); centerCanvas(); updateStatusProjectMeta(); 
 }
 
 function applyTransform() { wrapper.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`; document.getElementById('zoom-indicator').innerText = Math.round(zoom * 100) + '%'; }
@@ -1901,42 +1454,6 @@ function pickColor(x, y) {
 
 workspace.addEventListener('mousedown', (e) => {
     const pt = getCanvasMouse(e);
-    
-    if (isEditingUVManually && tempUVTemplate) {
-        let hitIndex = -1;
-        let handle = null;
-        
-        if (uvSelectedFaceIndex !== -1) {
-            handle = uvFaceHitTestHandles(pt.rawX, pt.rawY, tempUVTemplate.faces[uvSelectedFaceIndex]);
-        }
-        
-        if (handle) {
-            uvActiveHandle = handle;
-            uvDragStartX = pt.rawX;
-            uvDragStartY = pt.rawY;
-            uvInitFaceRect = { ...tempUVTemplate.faces[uvSelectedFaceIndex] };
-            return;
-        }
-        
-        for (let i = tempUVTemplate.faces.length - 1; i >= 0; i--) {
-            const face = tempUVTemplate.faces[i];
-            if (pt.rawX >= face.x && pt.rawX <= face.x + face.w && pt.rawY >= face.y && pt.rawY <= face.y + face.h) {
-                hitIndex = i;
-                break;
-            }
-        }
-        
-        uvSelectedFaceIndex = hitIndex;
-        if (uvSelectedFaceIndex !== -1) {
-            uvActiveHandle = 'move';
-            uvDragStartX = pt.rawX;
-            uvDragStartY = pt.rawY;
-            uvInitFaceRect = { ...tempUVTemplate.faces[uvSelectedFaceIndex] };
-        }
-        renderUVFaceList();
-        return;
-    }
-
     if (isLightingActive) {
         const rect = displayCanvas.getBoundingClientRect();
         const scaleX = rect.width / width;
@@ -1964,34 +1481,18 @@ workspace.addEventListener('mousedown', (e) => {
     if(isTransforming && e.button === 0) { tfActiveHandle = transformHitTest(pt.rawX, pt.rawY); if(tfActiveHandle) { tfStartX = pt.rawX; tfStartY = pt.rawY; tfInitX = tfX; tfInitY = tfY; tfInitW = tfW; tfInitH = tfH; tfInitAngle = tfAngle; return; } else { commitTransform(); } }
     if (e.button === 1 || currentTool === 'hand' || e.code === 'Space') { e.preventDefault(); isPanning = true; workspace.style.cursor = 'grabbing'; startX = e.clientX - panX; startY = e.clientY - panY; return; }
     if (e.button !== 0) return; 
-    
-    const currentLayer = getActiveLayer();
-    if(currentLayer && !currentLayer.visible) { showMessage(translations[currentLanguage].modals.layerHidden); return; }
+    if(!layers[activeLayerIndex].visible) { showMessage(translations[currentLanguage].modals.layerHidden); return; }
     if(symOn) { if(symDir === 'V' && Math.abs(pt.x - symX) <= 2) { isDraggingSym = true; return; } if(symDir === 'H' && Math.abs(pt.y - symY) <= 2) { isDraggingSym = true; return; } }
     
-    if (currentTool === 'emitterTool') {
-        addEmitter(pt.x, pt.y);
-        return;
-    }
-
-    if (currentTool === 'forceBrush') {
-        isDrawing = true;
-        startX = pt.x;
-        startY = pt.y;
-        lastX = pt.rawX;
-        lastY = pt.rawY;
-        return;
-    }
-
     if (!['magic', 'rectSelect', 'lassoSelect', 'picker'].includes(currentTool)) saveState();
     
-    isDrawing = true; startX = pt.x; startY = pt.y; lastX = pt.x; lastY = pt.y; const ctx = currentLayer.ctx;
+    isDrawing = true; startX = pt.x; startY = pt.y; lastX = pt.x; lastY = pt.y; const ctx = layers[activeLayerIndex].ctx;
     
     if (currentTool === 'picker') { pickColor(pt.x, pt.y); }
     else if (currentTool === 'pencil' || currentTool === 'eraser') { 
         strokeBackupCanvas.width = width;
         strokeBackupCanvas.height = height;
-        strokeBackupCanvas.getContext('2d').drawImage(currentLayer.canvas, 0, 0);
+        strokeBackupCanvas.getContext('2d').drawImage(layers[activeLayerIndex].canvas, 0, 0);
         strokePoints = [{x: pt.x, y: pt.y}];
         drawPoint(ctx, pt.x, pt.y, currentColor, brushSize, currentTool === 'eraser', false); 
         renderComposite(); 
@@ -2056,10 +1557,9 @@ function applyGradient(ctx, x0, y0, x1, y1) {
 }
 
 function copySelection() {
-    const actLayer = getActiveLayer();
-    if(!hasSelection || !selectionMask || !actLayer) return; let b = getBoundsMask(width, height, selectionMask);
+    if(!hasSelection || !selectionMask) return; let b = getBoundsMask(width, height, selectionMask);
     if(b) {
-        clipboardCanvas = document.createElement('canvas'); clipboardCanvas.width = b.w; clipboardCanvas.height = b.h; let cCtx = clipboardCanvas.getContext('2d'), srcData = actLayer.ctx.getImageData(b.x, b.y, b.w, b.h), clipData = cCtx.createImageData(b.w, b.h);
+        clipboardCanvas = document.createElement('canvas'); clipboardCanvas.width = b.w; clipboardCanvas.height = b.h; let cCtx = clipboardCanvas.getContext('2d'), srcData = layers[activeLayerIndex].ctx.getImageData(b.x, b.y, b.w, b.h), clipData = cCtx.createImageData(b.w, b.h);
         for(let y=0; y<b.h; y++){ for(let x=0; x<b.w; x++){ if(selectionMask[(b.y+y)*width+(b.x+x)]) { let idx = (y*b.w+x)*4; clipData.data[idx]=srcData.data[idx]; clipData.data[idx+1]=srcData.data[idx+1]; clipData.data[idx+2]=srcData.data[idx+2]; clipData.data[idx+3]=srcData.data[idx+3]; } } }
         cCtx.putImageData(clipData,0,0); showMessage("Píxeles copiados.");
     }
@@ -2099,15 +1599,18 @@ function nativeFinalizeLights(apply) {
     isLightingActive = false;
     isLightDragging = false;
     
-    const layer = getActiveLayer();
-    if (!apply && lightingBaseData && layer) {
-        layer.ctx.putImageData(lightingBaseData, 0, 0); renderComposite(); 
-    } else if (apply && lightingBaseData && layer) {
-        const finalLit = layer.ctx.getImageData(0, 0, width, height);
-        layer.ctx.putImageData(lightingBaseData, 0, 0);
-        saveState();
-        layer.ctx.putImageData(finalLit, 0, 0);
-        renderComposite();
+    if (!apply && lightingBaseData) {
+        const layer = layers[activeLayerIndex];
+        if (layer) { layer.ctx.putImageData(lightingBaseData, 0, 0); renderComposite(); }
+    } else if (apply && lightingBaseData) {
+        const layer = layers[activeLayerIndex];
+        if (layer) {
+            const finalLit = layer.ctx.getImageData(0, 0, width, height);
+            layer.ctx.putImageData(lightingBaseData, 0, 0);
+            saveState();
+            layer.ctx.putImageData(finalLit, 0, 0);
+            renderComposite();
+        }
     }
 
     lightingBaseData = null; lightingNormals = null; volumetricLights = []; activeLightRef = null;
@@ -2118,7 +1621,7 @@ function nativeFinalizeLights(apply) {
 
 function nativeRenderLightingEffect() {
     if (!lightingBaseData || !lightingNormals) return;
-    const layer = getActiveLayer();
+    const layer = layers[activeLayerIndex];
     if (!layer) return;
 
     const ctx = layer.ctx;
@@ -2175,7 +1678,7 @@ function nativeRenderLightingEffect() {
 }
 
 function nativeInitLightingMode() {
-    const layer = getActiveLayer();
+    const layer = layers[activeLayerIndex];
     if (!layer) return;
     if (!isLightingActive) {
         lightingBaseData = layer.ctx.getImageData(0, 0, width, height);
@@ -2263,8 +1766,8 @@ function nativeBuildNormalsMap(src) {
 }
 
 function runLive3DVolume() {
-    if (!effectBackupData || !getActiveLayer()) return;
-    const layer = getActiveLayer();
+    if (!effectBackupData || !layers[activeLayerIndex]) return;
+    const layer = layers[activeLayerIndex];
     layer.ctx.putImageData(effectBackupData, 0, 0);
 
     const ctx = layer.ctx;
@@ -2339,8 +1842,8 @@ function runLive3DVolume() {
 }
 
 function cancelNativeVol3D() {
-    if (effectBackupData && getActiveLayer()) {
-        getActiveLayer().ctx.putImageData(effectBackupData, 0, 0);
+    if (effectBackupData && layers[activeLayerIndex]) {
+        layers[activeLayerIndex].ctx.putImageData(effectBackupData, 0, 0);
         renderComposite();
     }
     effectBackupData = null;
@@ -2348,11 +1851,11 @@ function cancelNativeVol3D() {
 }
 
 function applyNativeVol3D() {
-    if (effectBackupData && getActiveLayer()) {
-        const finalData = getActiveLayer().ctx.getImageData(0, 0, width, height);
-        getActiveLayer().ctx.putImageData(effectBackupData, 0, 0);
+    if (effectBackupData && layers[activeLayerIndex]) {
+        const finalData = layers[activeLayerIndex].ctx.getImageData(0, 0, width, height);
+        layers[activeLayerIndex].ctx.putImageData(effectBackupData, 0, 0);
         saveState();
-        getActiveLayer().ctx.putImageData(finalData, 0, 0);
+        layers[activeLayerIndex].ctx.putImageData(finalData, 0, 0);
         renderComposite();
         updateActiveLayerPreview();
     }
@@ -2370,7 +1873,7 @@ function openNativeLightModal() {
 }
 
 function openNativeVolModal() { 
-    const layer = getActiveLayer();
+    const layer = layers[activeLayerIndex];
     if (!layer) return;
     effectBackupData = layer.ctx.getImageData(0, 0, width, height);
     
@@ -2390,7 +1893,7 @@ function openEffectSettings(effectName) {
     const bodyEl = document.getElementById('effect-settings-body');
     const applyBtn = document.getElementById('btn-effect-apply');
     
-    const layer = getActiveLayer();
+    const layer = layers[activeLayerIndex];
     if (!layer) return;
     effectBackupData = layer.ctx.getImageData(0, 0, width, height);
 
@@ -2593,8 +2096,8 @@ function openEffectSettings(effectName) {
 
     const cancelBtn = document.getElementById('btn-effect-cancel');
     cancelBtn.onclick = () => {
-        if (effectBackupData && getActiveLayer()) {
-            getActiveLayer().ctx.putImageData(effectBackupData, 0, 0);
+        if (effectBackupData && layers[activeLayerIndex]) {
+            layers[activeLayerIndex].ctx.putImageData(effectBackupData, 0, 0);
             renderComposite();
         }
         effectBackupData = null;
@@ -2602,11 +2105,11 @@ function openEffectSettings(effectName) {
     };
 
     applyBtn.onclick = () => {
-        if (effectBackupData && getActiveLayer()) {
-            const finalData = getActiveLayer().ctx.getImageData(0, 0, width, height);
-            getActiveLayer().ctx.putImageData(effectBackupData, 0, 0);
+        if (effectBackupData && layers[activeLayerIndex]) {
+            const finalData = layers[activeLayerIndex].ctx.getImageData(0, 0, width, height);
+            layers[activeLayerIndex].ctx.putImageData(effectBackupData, 0, 0);
             saveState();
-            getActiveLayer().ctx.putImageData(finalData, 0, 0);
+            layers[activeLayerIndex].ctx.putImageData(finalData, 0, 0);
             renderComposite();
             updateActiveLayerPreview();
         }
@@ -2618,8 +2121,8 @@ function openEffectSettings(effectName) {
 }
 
 function applyLiveEffect() {
-    if (!effectBackupData || !getActiveLayer()) return;
-    const layer = getActiveLayer();
+    if (!effectBackupData || !layers[activeLayerIndex]) return;
+    const layer = layers[activeLayerIndex];
     layer.ctx.putImageData(effectBackupData, 0, 0);
 
     if (activeEffectName === 'mirror') {
@@ -2926,16 +2429,6 @@ function hexToRgb(hex) {
     } : { r: 0, g: 0, b: 0, a: 255 };
 }
 
-function interpolateColor(hex1, hex2, ratio) {
-    const c1 = hexToRgb(hex1);
-    const c2 = hexToRgb(hex2);
-    const r = Math.round(c1.r + (c2.r - c1.r) * ratio);
-    const g = Math.round(c1.g + (c2.g - c1.g) * ratio);
-    const b = Math.round(c1.b + (c2.b - c1.b) * ratio);
-    const toHex = x => x.toString(16).padStart(2, '0');
-    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
-}
-
 function updateStatusProjectMeta() {
     const statusSize = document.getElementById('status-size');
     const statusColorSpace = document.getElementById('status-color-space');
@@ -2975,11 +2468,11 @@ function makeElementDraggable(el, handle) {
 }
 
 function generateProjectData() {
-    const serializedFrames = timeline.frames.map(f => {
-        const wasSerialized = (f.layers.length === 0);
-        if (wasSerialized) f.deserialize();
-        
-        const layersData = f.layers.map(l => ({
+    return {
+        width,
+        height,
+        colorMode,
+        layers: layers.map(l => ({
             name: l.name,
             visible: l.visible,
             opacity: l.opacity,
@@ -2987,24 +2480,8 @@ function generateProjectData() {
             tintColor: l.tintColor,
             tintFactor: l.tintFactor,
             dataUrl: l.canvas.toDataURL()
-        }));
-        
-        if (wasSerialized) f.serialize();
-        
-        return {
-            duration: f.duration,
-            layers: layersData
-        };
-    });
-
-    return {
-        width,
-        height,
-        colorMode,
-        fps: timeline.fps,
-        frames: serializedFrames,
-        palette,
-        vectorField: Array.from(vectorField)
+        })),
+        palette
     };
 }
 
@@ -3017,17 +2494,10 @@ function saveNative() {
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
-    
-    lastManualSaveTime = Date.now();
 }
 
-function triggerLoadProject() {
-    confirmUnsavedChanges(() => {
-        document.getElementById('file-upload').click();
-    });
-}
-
-document.getElementById('file-upload')?.addEventListener('change', function(e) {
+// Carga un archivo .pixvec existente
+document.getElementById('file-upload')?.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
@@ -3040,7 +2510,6 @@ document.getElementById('file-upload')?.addEventListener('change', function(e) {
         }
     };
     reader.readAsText(file);
-    this.value = ''; 
 });
 
 function loadProjectData(data) {
@@ -3056,75 +2525,38 @@ function loadProjectData(data) {
     });
 
     selectionMask = new Uint8Array(width * height);
-    timeline = new PixelTimeline();
-    timeline.fps = data.fps || 12;
-    emitters = [];
-    
-    if (data.vectorField) {
-        vectorField = new Float32Array(data.vectorField);
-    } else {
-        initVectorField();
-    }
+    layers = [];
+    layerCounter = 0;
 
-    let framesToLoad = data.frames || [{ layers: data.layers || [] }];
-    let loadedCount = 0;
-
-    framesToLoad.forEach((fData, fIdx) => {
-        const frame = new PixelFrame(width, height);
-        frame.duration = fData.duration || 1;
-        timeline.frames.push(frame);
-
-        let layersToLoad = fData.layers || [];
-        let layersLoaded = 0;
-
-        if (layersToLoad.length === 0) {
-            frame.layers.push(createLayer(currentLanguage === 'es' ? 'Fondo' : 'Background'));
-            loadedCount++;
-            checkFinished();
-        }
-
-        layersToLoad.forEach((lData) => {
-            const layer = createLayer(lData.name);
-            layer.visible = lData.visible !== false;
-            layer.opacity = lData.opacity !== undefined ? lData.opacity : 1.0;
-            layer.blendMode = lData.blendMode || 'source-over';
-            layer.tintColor = lData.tintColor || '#3b82f6';
-            layer.tintFactor = lData.tintFactor !== undefined ? lData.tintFactor : 0.0;
-            
-            const img = new Image();
-            img.onload = () => {
-                layer.ctx.drawImage(img, 0, 0);
-                layersLoaded++;
-                if (layersLoaded === layersToLoad.length) {
-                    loadedCount++;
-                    if (fIdx !== 0) {
-                        frame.serialize();
-                    }
-                    checkFinished();
-                }
-            };
-            img.src = lData.dataUrl;
-            frame.layers.push(layer);
-        });
+    let loadedLayersCount = 0;
+    data.layers.forEach((lData) => {
+        const layer = createLayer(lData.name);
+        layer.visible = lData.visible !== false;
+        layer.opacity = lData.opacity !== undefined ? lData.opacity : 1.0;
+        layer.blendMode = lData.blendMode || 'source-over';
+        layer.tintColor = lData.tintColor || '#3b82f6';
+        layer.tintFactor = lData.tintFactor !== undefined ? lData.tintFactor : 0.0;
+        
+        const img = new Image();
+        img.onload = () => {
+            layer.ctx.drawImage(img, 0, 0);
+            loadedLayersCount++;
+            if (loadedLayersCount === data.layers.length) {
+                activeLayerIndex = layers.length - 1;
+                renderLayersList();
+                renderComposite();
+                centerCanvas();
+                updateStatusProjectMeta();
+            }
+        };
+        img.src = lData.dataUrl;
+        layers.push(layer);
     });
-
-    function checkFinished() {
-        if (loadedCount === framesToLoad.length) {
-            timeline.currentFrameIndex = 0;
-            activeLayerIndex = 0;
-            renderLayersList();
-            renderComposite();
-            centerCanvas();
-            updateStatusProjectMeta();
-            updateTimelineUI();
-        }
-    }
-
     cancelSelection();
     clearHistory();
-    lastManualSaveTime = Date.now();
 }
 
+// Modales de exportación PNG/JPG
 let exportFormat = 'png';
 function openExportModal(format) {
     exportFormat = format;
@@ -3139,30 +2571,27 @@ function confirmExport() {
     const exportCtx = exportCanvas.getContext('2d');
     exportCtx.imageSmoothingEnabled = false;
 
-    const frame = timeline.frames[timeline.currentFrameIndex];
-    if (frame) {
-        frame.layers.forEach(layer => {
-            if (layer.visible) {
-                exportCtx.globalAlpha = layer.opacity;
-                exportCtx.globalCompositeOperation = layer.blendMode;
-                
-                if (layer.tintFactor && layer.tintFactor > 0) {
-                    let tempC = document.createElement('canvas');
-                    tempC.width = width;
-                    tempC.height = height;
-                    let tempCtx = tempC.getContext('2d');
-                    tempCtx.drawImage(layer.canvas, 0, 0);
-                    tempCtx.globalCompositeOperation = 'source-atop';
-                    tempCtx.fillStyle = layer.tintColor || '#3b82f6';
-                    tempCtx.globalAlpha = layer.tintFactor;
-                    tempCtx.fillRect(0, 0, width, height);
-                    exportCtx.drawImage(tempC, 0, 0, width, height, 0, 0, width * scale, height * scale);
-                } else {
-                    exportCtx.drawImage(layer.canvas, 0, 0, width, height, 0, 0, width * scale, height * scale);
-                }
+    layers.forEach(layer => {
+        if (layer.visible) {
+            exportCtx.globalAlpha = layer.opacity;
+            exportCtx.globalCompositeOperation = layer.blendMode;
+            
+            if (layer.tintFactor && layer.tintFactor > 0) {
+                let tempC = document.createElement('canvas');
+                tempC.width = width;
+                tempC.height = height;
+                let tempCtx = tempC.getContext('2d');
+                tempCtx.drawImage(layer.canvas, 0, 0);
+                tempCtx.globalCompositeOperation = 'source-atop';
+                tempCtx.fillStyle = layer.tintColor || '#3b82f6';
+                tempCtx.globalAlpha = layer.tintFactor;
+                tempCtx.fillRect(0, 0, width, height);
+                exportCtx.drawImage(tempC, 0, 0, width, height, 0, 0, width * scale, height * scale);
+            } else {
+                exportCtx.drawImage(layer.canvas, 0, 0, width, height, 0, 0, width * scale, height * scale);
             }
-        });
-    }
+        }
+    });
 
     if (exportFormat === 'jpeg') {
         const tempCanvas = document.createElement('canvas');
@@ -3185,648 +2614,7 @@ function confirmExport() {
     closeModal('modal-export');
 }
 
-function transformCanvasIsometric(srcCanvas, face) {
-    const w = srcCanvas.width;
-    const h = srcCanvas.height;
-    const outCanvas = document.createElement('canvas');
-    let outW, outH;
-
-    if (face === 'left' || face === 'right') {
-        outW = Math.ceil(w * 0.866);
-        outH = Math.ceil(h + w * 0.5);
-    } else { 
-        outW = Math.ceil((w + h) * 0.866);
-        outH = Math.ceil((w + h) * 0.5);
-    }
-
-    outCanvas.width = outW;
-    outCanvas.height = outH;
-    const oCtx = outCanvas.getContext('2d');
-    oCtx.imageSmoothingEnabled = false;
-
-    oCtx.save();
-    if (face === 'left') {
-        oCtx.transform(0.866, -0.5, 0, 1, 0, w * 0.5);
-    } else if (face === 'right') {
-        oCtx.transform(0.866, 0.5, 0, 1, 0, 0);
-    } else if (face === 'top') {
-        oCtx.transform(0.866, -0.5, 0.866, 0.5, 0, w * 0.5);
-    }
-    oCtx.drawImage(srcCanvas, 0, 0);
-    oCtx.restore();
-    return outCanvas;
-}
-
-function convertSelectionToIsometric(face) {
-    const layer = getActiveLayer();
-    if (!hasSelection || !selectionMask || !layer) {
-        showMessage(currentLanguage === 'es' ? "Por favor, realiza una selección primero." : "Please make a selection first.");
-        return;
-    }
-    saveState();
-    let b = getBoundsMask(width, height, selectionMask);
-    if (!b) return;
-
-    let tempC = document.createElement('canvas');
-    tempC.width = b.w;
-    tempC.height = b.h;
-    let tCtx = tempC.getContext('2d');
-    tCtx.imageSmoothingEnabled = false;
-
-    let actCtx = layer.ctx;
-    let sData = actCtx.getImageData(b.x, b.y, b.w, b.h);
-    let tData = tCtx.createImageData(b.w, b.h);
-
-    for (let y = 0; y < b.h; y++) {
-        for (let x = 0; x < b.w; x++) {
-            let globalX = b.x + x;
-            let globalY = b.y + y;
-            if (selectionMask[globalY * width + globalX]) {
-                let idx = (y * b.w + x) * 4;
-                tData.data[idx] = sData.data[idx];
-                tData.data[idx+1] = sData.data[idx+1];
-                tData.data[idx+2] = sData.data[idx+2];
-                tData.data[idx+3] = sData.data[idx+3];
-                sData.data[idx+3] = 0;
-            }
-        }
-    }
-    tCtx.putImageData(tData, 0, 0);
-    actCtx.putImageData(sData, b.x, b.y);
-
-    let isoCanvas = transformCanvasIsometric(tempC, face);
-    cancelSelection();
-
-    tfCanvas.width = isoCanvas.width;
-    tfCanvas.height = isoCanvas.height;
-    let tfCtx = tfCanvas.getContext('2d');
-    tfCtx.imageSmoothingEnabled = false;
-    tfCtx.drawImage(isoCanvas, 0, 0);
-
-    tfX = b.x;
-    tfY = b.y;
-    tfW = isoCanvas.width;
-    tfH = isoCanvas.height;
-    tfType = 'raster';
-    tfAngle = 0;
-    isTransforming = true;
-
-    document.getElementById('btn-modify-sel').classList.add('hidden');
-    document.getElementById('btn-commit-tf').classList.remove('hidden');
-    document.getElementById('selection-toolbar').classList.remove('hidden');
-
-    renderComposite();
-}
-
-function getUVTemplatesDir() {
-    if (!os || !path || !fs) return '';
-    const uvDir = path.join(getAppDir(), 'uv_templates');
-    if (!fs.existsSync(uvDir)) fs.mkdirSync(uvDir);
-    return uvDir;
-}
-
-function getAdaptedUVTemplate(template) {
-    if (!template) return null;
-    const scaleX = width / template.width;
-    const scaleY = height / template.height;
-    return {
-        name: template.name,
-        width: width,
-        height: height,
-        faces: template.faces.map(f => ({
-            name: f.name,
-            x: Math.round(f.x * scaleX),
-            y: Math.round(f.y * scaleY),
-            w: Math.round(f.w * scaleX),
-            h: Math.round(f.h * scaleY),
-            color: f.color
-        }))
-    };
-}
-
-function loadUVTemplates() {
-    uvTemplates = [];
-    
-    const defaults = [
-        {
-            name: "Minecraft Skin Head (64x64)",
-            width: 64,
-            height: 64,
-            faces: [
-                { name: "Head Top", x: 8, y: 0, w: 8, h: 8, color: "#10b981" },
-                { name: "Head Bottom", x: 16, y: 0, w: 8, h: 8, color: "#f59e0b" },
-                { name: "Head Right", x: 0, y: 8, w: 8, h: 8, color: "#8b5cf6" },
-                { name: "Head Front", x: 8, y: 8, w: 8, h: 8, color: "#3b82f6" },
-                { name: "Head Left", x: 16, y: 8, w: 8, h: 8, color: "#ec4899" },
-                { name: "Head Back", x: 24, y: 8, w: 8, h: 8, color: "#ef4444" },
-                { name: "Hat Top", x: 40, y: 0, w: 8, h: 8, color: "#10b981" },
-                { name: "Hat Bottom", x: 48, y: 0, w: 8, h: 8, color: "#f59e0b" },
-                { name: "Hat Right", x: 32, y: 8, w: 8, h: 8, color: "#8b5cf6" },
-                { name: "Hat Front", x: 40, y: 8, w: 8, h: 8, color: "#3b82f6" },
-                { name: "Hat Left", x: 48, y: 8, w: 8, h: 8, color: "#ec4899" },
-                { name: "Hat Back", x: 56, y: 8, w: 8, h: 8, color: "#ef4444" }
-            ]
-        },
-        {
-            name: "Minecraft Skin Steve Full (64x64)",
-            width: 64,
-            height: 64,
-            faces: [
-                { name: "Head Front", x: 8, y: 8, w: 8, h: 8, color: "#3b82f6" },
-                { name: "Head Back", x: 24, y: 8, w: 8, h: 8, color: "#ef4444" },
-                { name: "Body Front", x: 20, y: 20, w: 8, h: 12, color: "#3b82f6" },
-                { name: "Body Back", x: 32, y: 20, w: 8, h: 12, color: "#ef4444" },
-                { name: "R-Arm Front", x: 44, y: 20, w: 4, h: 12, color: "#3b82f6" },
-                { name: "L-Arm Front", x: 36, y: 52, w: 4, h: 12, color: "#ec4899" },
-                { name: "R-Leg Front", x: 4, y: 20, w: 4, h: 12, color: "#3b82f6" },
-                { name: "L-Leg Front", x: 20, y: 52, w: 4, h: 12, color: "#ec4899" }
-            ]
-        }
-    ];
-
-    if (fs && path && os) {
-        try {
-            const fp = path.join(getAppDir(), 'deleted_defaults.json');
-            if (fs.existsSync(fp)) deletedDefaultTemplates = JSON.parse(fs.readFileSync(fp, 'utf8'));
-        } catch(e) {}
-    } else {
-        try {
-            const stored = localStorage.getItem('pixvec_deleted_defaults');
-            if (stored) deletedDefaultTemplates = JSON.parse(stored);
-        } catch(e) {}
-    }
-
-    if (fs && path && os) {
-        try {
-            const dir = getUVTemplatesDir();
-            const files = fs.readdirSync(dir);
-            files.forEach(file => {
-                if (file.endsWith('.json')) {
-                    try {
-                        const data = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf8'));
-                        if (data && data.name && data.faces) {
-                            uvTemplates.push(data);
-                        }
-                    } catch(e) {}
-                }
-            });
-        } catch (err) {}
-    } else {
-        try {
-            const stored = localStorage.getItem('pixvec_uv_templates');
-            if (stored) uvTemplates = JSON.parse(stored);
-        } catch(e) {}
-    }
-
-    defaults.forEach(def => {
-        if (!deletedDefaultTemplates.includes(def.name) && !uvTemplates.some(t => t.name === def.name)) {
-            uvTemplates.push(def);
-        }
-    });
-
-    updateUVDropdown();
-}
-
-function saveUVTemplate(template) {
-    if (!template || !template.name) return;
-    uvTemplates = uvTemplates.filter(t => t.name !== template.name);
-    uvTemplates.push(template);
-
-    if (fs && path && os) {
-        try {
-            const dir = getUVTemplatesDir();
-            const safeName = template.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-            fs.writeFileSync(path.join(dir, `${safeName}.json`), JSON.stringify(template, null, 2));
-        } catch(e) {}
-    } else {
-        try {
-            localStorage.setItem('pixvec_uv_templates', JSON.stringify(uvTemplates));
-        } catch(e) {}
-    }
-    loadUVTemplates();
-}
-
-function deleteUVTemplate(name) {
-    uvTemplates = uvTemplates.filter(t => t.name !== name);
-    
-    if (!deletedDefaultTemplates.includes(name)) {
-        deletedDefaultTemplates.push(name);
-        if (fs && path && os) {
-            try {
-                fs.writeFileSync(path.join(getAppDir(), 'deleted_defaults.json'), JSON.stringify(deletedDefaultTemplates));
-            } catch(e) {}
-        } else {
-            try {
-                localStorage.setItem('pixvec_deleted_defaults', JSON.stringify(deletedDefaultTemplates));
-            } catch(e) {}
-        }
-    }
-
-    if (fs && path && os) {
-        try {
-            const dir = getUVTemplatesDir();
-            const safeName = name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-            const fp = path.join(dir, `${safeName}.json`);
-            if (fs.existsSync(fp)) fs.unlinkSync(fp);
-        } catch(e) {}
-    } else {
-        try {
-            localStorage.setItem('pixvec_uv_templates', JSON.stringify(uvTemplates));
-        } catch(e) {}
-    }
-    if (activeUVTemplate && activeUVTemplate.name === name) {
-        activeUVTemplate = null;
-        showUVOverlay = false;
-        document.getElementById('chk-uv-overlay').checked = false;
-    }
-    loadUVTemplates();
-}
-
-function updateUVDropdown() {
-    const select = document.getElementById('uv-template-select');
-    if (!select) return;
-    select.innerHTML = `<option value="">-- Seleccionar Plantilla --</option>`;
-    uvTemplates.forEach((t, i) => {
-        const opt = document.createElement('option');
-        opt.value = i;
-        opt.innerText = `${t.name} (${t.width}x${t.height})`;
-        select.appendChild(opt);
-    });
-    if (activeUVTemplate) {
-        const idx = uvTemplates.findIndex(t => t.name === activeUVTemplate.name);
-        if (idx !== -1) select.value = idx;
-    }
-}
-
-function selectUVTemplate(index) {
-    if (index === "" || !uvTemplates[index]) {
-        activeUVTemplate = null;
-        showUVOverlay = false;
-        return;
-    }
-    activeUVTemplate = uvTemplates[index];
-    showUVOverlay = document.getElementById('chk-uv-overlay').checked;
-}
-
-function toggleUVOverlay(checked) {
-    showUVOverlay = checked;
-}
-
-function stampUVTemplateToLayer() {
-    const activeLayer = getActiveLayer();
-    if (!activeUVTemplate || !activeLayer) {
-        showMessage(currentLanguage === 'es' ? "Por favor selecciona una plantilla y una capa activa." : "Please select a template and active layer first.");
-        return;
-    }
-    saveState();
-    const ctx = activeLayer.ctx;
-    ctx.save();
-    
-    const adapted = getAdaptedUVTemplate(activeUVTemplate);
-    if (adapted) {
-        adapted.faces.forEach(face => {
-            ctx.strokeStyle = face.color || '#3b82f6';
-            ctx.lineWidth = 1;
-            drawRectOutline(ctx, face.x, face.y, face.x + face.w - 1, face.y + face.h - 1, face.color, 1, false, false);
-        });
-    }
-    ctx.restore();
-    renderComposite();
-    updateActiveLayerPreview();
-}
-
-function uvFaceHitTestHandles(rawX, rawY, face) {
-    const hs = 6 / zoom; 
-    if (Math.abs(rawX - face.x) < hs && Math.abs(rawY - face.y) < hs) return 'tl';
-    if (Math.abs(rawX - (face.x + face.w)) < hs && Math.abs(rawY - face.y) < hs) return 'tr';
-    if (Math.abs(rawX - face.x) < hs && Math.abs(rawY - (face.y + face.h)) < hs) return 'bl';
-    if (Math.abs(rawX - (face.x + face.w)) < hs && Math.abs(rawY - (face.y + face.h)) < hs) return 'br';
-    return null;
-}
-
-function openUVManager() {
-    isEditingUVManually = true;
-    uvSelectedFaceIndex = -1;
-    uvActiveHandle = null;
-
-    if (activeUVTemplate) {
-        tempUVTemplate = JSON.parse(JSON.stringify(activeUVTemplate));
-    } else {
-        tempUVTemplate = { name: "", width: width, height: height, faces: [] };
-    }
-    
-    document.getElementById('uv-m-name').value = tempUVTemplate.name;
-    document.getElementById('uv-m-width').value = tempUVTemplate.width;
-    document.getElementById('uv-m-height').value = tempUVTemplate.height;
-    
-    renderUVManagerList();
-    renderUVFaceList();
-    document.getElementById('modal-uv-manager').classList.remove('hidden');
-}
-
-function closeUVManager() {
-    isEditingUVManually = false;
-    uvSelectedFaceIndex = -1;
-    uvActiveHandle = null;
-    closeModal('modal-uv-manager');
-}
-
-function renderUVManagerList() {
-    const container = document.getElementById('uv-saved-templates-list');
-    if (!container) return;
-    container.innerHTML = '';
-    uvTemplates.forEach(t => {
-        const item = document.createElement('div');
-        item.className = 'flex justify-between items-center bg-zinc-950 p-2 rounded border border-zinc-850 mb-1.5';
-        
-        const label = document.createElement('span');
-        label.className = 'text-xs text-zinc-300 font-bold truncate flex-1';
-        label.innerText = `${t.name} (${t.width}x${t.height})`;
-        
-        const btnGroup = document.createElement('div');
-        btnGroup.className = 'flex gap-1 shrink-0';
-        
-        const btnEdit = document.createElement('button');
-        btnEdit.innerText = 'Edit';
-        btnEdit.className = 'text-[9px] bg-blue-950 text-blue-300 border border-blue-800 px-2 py-1 rounded font-bold hover:bg-blue-600 hover:text-white';
-        btnEdit.onclick = () => {
-            tempUVTemplate = JSON.parse(JSON.stringify(t));
-            document.getElementById('uv-m-name').value = tempUVTemplate.name;
-            document.getElementById('uv-m-width').value = tempUVTemplate.width;
-            document.getElementById('uv-m-height').value = tempUVTemplate.height;
-            uvSelectedFaceIndex = -1;
-            renderUVFaceList();
-        };
-
-        const btnDel = document.createElement('button');
-        btnDel.innerText = 'Del';
-        btnDel.className = 'text-[9px] bg-red-950 text-red-300 border border-red-800 px-2 py-1 rounded font-bold hover:bg-red-600 hover:text-white';
-        btnDel.onclick = () => {
-            if (confirm(currentLanguage === 'es' ? `¿Eliminar la plantilla "${t.name}"?` : `Delete template "${t.name}"?`)) {
-                deleteUVTemplate(t.name);
-                renderUVManagerList();
-            }
-        };
-
-        btnGroup.appendChild(btnEdit);
-        btnGroup.appendChild(btnDel);
-        item.appendChild(label);
-        item.appendChild(btnGroup);
-        container.appendChild(item);
-    });
-}
-
-function renderUVFaceList() {
-    const container = document.getElementById('uv-faces-container');
-    if (!container) return;
-    container.innerHTML = '';
-    
-    tempUVTemplate.faces.forEach((face, idx) => {
-        const tr = document.createElement('tr');
-        tr.className = `border-b border-zinc-850 text-xs transition-colors ${idx === uvSelectedFaceIndex ? 'bg-blue-950/20' : ''}`;
-        
-        tr.innerHTML = `
-            <td class="p-1"><input type="text" value="${face.name}" oninput="updateTempFace(${idx}, 'name', this.value)" class="w-full bg-zinc-900 border border-zinc-800 text-[10px] text-white rounded p-0.5 font-bold"></td>
-            <td class="p-1"><input type="number" id="uv-face-x-${idx}" value="${face.x}" oninput="updateTempFace(${idx}, 'x', parseInt(this.value)||0)" class="
-            bg-[#09090b] border border-zinc-800 text-[10px] text-white text-center rounded p-0.5 font-mono"></td>
-            <td class="p-1"><input type="number" id="uv-face-y-${idx}" value="${face.y}" oninput="updateTempFace(${idx}, 'y', parseInt(this.value)||0)" class="w-10 bg-[#09090b] border border-zinc-800 text-[10px] text-white text-center rounded p-0.5 font-mono"></td>
-            <td class="p-1"><input type="number" id="uv-face-w-${idx}" value="${face.w}" oninput="updateTempFace(${idx}, 'w', parseInt(this.value)||0)" class="w-10 bg-[#09090b] border border-zinc-800 text-[10px] text-white text-center rounded p-0.5 font-mono"></td>
-            <td class="p-1"><input type="number" id="uv-face-h-${idx}" value="${face.h}" oninput="updateTempFace(${idx}, 'h', parseInt(this.value)||0)" class="w-10 bg-[#09090b] border border-zinc-800 text-[10px] text-white text-center rounded p-0.5 font-mono"></td>
-            <td class="p-1 flex items-center gap-1">
-                <input type="color" value="${face.color || '#3b82f6'}" oninput="updateTempFace(${idx}, 'color', this.value)" class="w-5 h-5 bg-transparent border-0 cursor-pointer p-0">
-                <button onclick="deleteTempFace(${idx})" class="text-red-500 hover:text-red-300 font-bold px-1.5 py-0.5 bg-zinc-900 border border-zinc-800 rounded">X</button>
-            </td>
-        `;
-        container.appendChild(tr);
-    });
-}
-
-function updateUVInputsForFace(idx, face) {
-    const xInput = document.getElementById(`uv-face-x-${idx}`);
-    const yInput = document.getElementById(`uv-face-y-${idx}`);
-    const wInput = document.getElementById(`uv-face-w-${idx}`);
-    const hInput = document.getElementById(`uv-face-h-${idx}`);
-    if (xInput) xInput.value = face.x;
-    if (yInput) yInput.value = face.y;
-    if (wInput) wInput.value = face.w;
-    if (hInput) hInput.value = face.h;
-}
-
-function updateTempFace(idx, key, val) {
-    if (tempUVTemplate.faces[idx]) {
-        tempUVTemplate.faces[idx][key] = val;
-    }
-}
-
-function deleteTempFace(idx) {
-    tempUVTemplate.faces.splice(idx, 1);
-    if (uvSelectedFaceIndex === idx) uvSelectedFaceIndex = -1;
-    renderUVFaceList();
-}
-
-function addTempFace() {
-    tempUVTemplate.faces.push({
-        name: `Face ${tempUVTemplate.faces.length + 1}`,
-        x: 0,
-        y: 0,
-        w: 8,
-        h: 8,
-        color: "#3b82f6"
-    });
-    renderUVFaceList();
-}
-
-function saveUVTemplateFromManager() {
-    const nameInput = document.getElementById('uv-m-name').value.trim();
-    const wInput = parseInt(document.getElementById('uv-m-width').value) || 64;
-    const hInput = parseInt(document.getElementById('uv-m-height').value) || 64;
-
-    if (!nameInput) {
-        alert(currentLanguage === 'es' ? "Por favor ingresa un nombre para la plantilla." : "Please enter a template name.");
-        return;
-    }
-
-    tempUVTemplate.name = nameInput;
-    tempUVTemplate.width = wInput;
-    tempUVTemplate.height = hInput;
-
-    saveUVTemplate(tempUVTemplate);
-    renderUVManagerList();
-    showMessage(currentLanguage === 'es' ? "Plantilla UV guardada con éxito." : "UV Template saved successfully.");
-}
-
-// Inyección de Fuerza Vectorial
-function injectForce(cx, cy, fx, fy, radius) {
-    for (let dy = -radius; dy <= radius; dy++) {
-        for (let dx = -radius; dx <= radius; dx++) {
-            const x = cx + dx;
-            const y = cy + dy;
-            if (x >= 0 && x < width && y >= 0 && y < height) {
-                const dist = Math.hypot(dx, dy);
-                if (dist <= radius) {
-                    const idx = (y * width + x) * 2;
-                    const falloff = 1 - (dist / radius);
-                    vectorField[idx] += fx * falloff;
-                    vectorField[idx + 1] += fy * falloff;
-                }
-            }
-        }
-    }
-}
-
-// Emisores de Partículas
-function addEmitter(x, y) {
-    const e = new PixelEmitter(x, y);
-    emitters.push(e);
-    showMessage(currentLanguage === 'es' ? "Emisor de partículas añadido." : "Particle emitter added.");
-}
-
-function bakeParticlesToActiveLayer() {
-    const layer = getActiveLayer();
-    if (!layer) return;
-    saveState();
-    const ctx = layer.ctx;
-    emitters.forEach(e => {
-        e.particles.forEach(p => {
-            const px = Math.floor(p.x);
-            const py = Math.floor(p.y);
-            if (px >= 0 && px < width && py >= 0 && py < height) {
-                ctx.fillStyle = p.color;
-                ctx.fillRect(px, py, 1, 1);
-            }
-        });
-    });
-    renderComposite();
-    updateActiveLayerPreview();
-}
-
-// Gestión del Timeline Visual
-function addFrame() {
-    saveState();
-    const newFrame = new PixelFrame(width, height);
-    newFrame.layers.push(createLayer(currentLanguage === 'es' ? 'Fondo' : 'Background'));
-    timeline.frames.splice(timeline.currentFrameIndex + 1, 0, newFrame);
-    selectFrame(timeline.currentFrameIndex + 1);
-}
-
-function duplicateFrame() {
-    saveState();
-    const sourceFrame = timeline.frames[timeline.currentFrameIndex];
-    const wasSerialized = (sourceFrame.layers.length === 0);
-    if (wasSerialized) sourceFrame.deserialize();
-
-    const newFrame = new PixelFrame(width, height);
-    newFrame.duration = sourceFrame.duration;
-    newFrame.layers = sourceFrame.layers.map(l => {
-        const nl = createLayer(l.name);
-        nl.opacity = l.opacity;
-        nl.blendMode = l.blendMode;
-        nl.tintColor = l.tintColor || '#3b82f6';
-        nl.tintFactor = l.tintFactor || 0.0;
-        nl.ctx.drawImage(l.canvas, 0, 0);
-        return nl;
-    });
-
-    if (wasSerialized) sourceFrame.serialize();
-
-    timeline.frames.splice(timeline.currentFrameIndex + 1, 0, newFrame);
-    selectFrame(timeline.currentFrameIndex + 1);
-}
-
-function deleteFrame() {
-    if (timeline.frames.length <= 1) return;
-    saveState();
-    timeline.frames.splice(timeline.currentFrameIndex, 1);
-    const targetIdx = Math.max(0, timeline.currentFrameIndex - 1);
-    selectFrame(targetIdx);
-}
-
-function togglePlayback() {
-    timeline.isPlaying = !timeline.isPlaying;
-    const playBtn = document.getElementById('btn-timeline-play');
-    if (playBtn) {
-        playBtn.innerText = timeline.isPlaying ? '❚❚' : '▶';
-    }
-}
-
-function toggleOnionSkin() {
-    timeline.onionSkinOn = !timeline.onionSkinOn;
-    const btn = document.getElementById('btn-onion-skin');
-    if (btn) {
-        if (timeline.onionSkinOn) {
-            btn.classList.add('text-blue-400');
-        } else {
-            btn.classList.remove('text-blue-400');
-        }
-    }
-    selectFrame(timeline.currentFrameIndex); 
-}
-
-function updateTimelineUI() {
-    const container = document.getElementById('timeline-frames-list');
-    if (!container) return;
-    container.innerHTML = '';
-
-    timeline.frames.forEach((f, idx) => {
-        const btn = document.createElement('button');
-        btn.className = `w-10 h-10 shrink-0 rounded-lg border font-mono text-xs font-bold transition-all relative flex flex-col items-center justify-center ${idx === timeline.currentFrameIndex ? 'bg-blue-600 text-white border-blue-400 scale-105' : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:bg-zinc-800'}`;
-        
-        btn.innerText = idx + 1;
-        btn.onclick = () => selectFrame(idx);
-
-        container.appendChild(btn);
-    });
-}
-
-// Exportación de Spritesheet
-function exportSpritesheet() {
-    const columns = prompt(currentLanguage === 'es' ? "Número de columnas para el Spritesheet:" : "Number of columns for Spritesheet:", "5") || 5;
-    const cols = parseInt(columns);
-    if (isNaN(cols) || cols < 1) return;
-    
-    const totalFrames = timeline.frames.length;
-    const rows = Math.ceil(totalFrames / cols);
-
-    const sheetCanvas = document.createElement('canvas');
-    sheetCanvas.width = cols * width;
-    sheetCanvas.height = rows * height;
-    const sheetCtx = sheetCanvas.getContext('2d');
-    sheetCtx.imageSmoothingEnabled = false;
-
-    timeline.frames.forEach((f, idx) => {
-        const wasSerialized = (f.layers.length === 0);
-        if (wasSerialized) f.deserialize();
-
-        const col = idx % cols;
-        const row = Math.floor(idx / cols);
-
-        const tempC = document.createElement('canvas');
-        tempC.width = width;
-        tempC.height = height;
-        const tempCtx = tempC.getContext('2d');
-        tempCtx.imageSmoothingEnabled = false;
-
-        f.layers.forEach(l => {
-            if (l.visible) {
-                tempCtx.globalAlpha = l.opacity;
-                tempCtx.globalCompositeOperation = l.blendMode;
-                tempCtx.drawImage(l.canvas, 0, 0);
-            }
-        });
-
-        sheetCtx.drawImage(tempC, col * width, row * height);
-
-        if (wasSerialized) f.serialize();
-    });
-
-    const dataUrl = sheetCanvas.toDataURL('image/png');
-    const a = document.createElement('a');
-    a.href = dataUrl;
-    a.download = `spritesheet_${Date.now()}.png`;
-    a.click();
-}
-
-// Controladores de Eventos de Ratón (Mesa de Trabajo)
+// Controladores de eventos del ratón
 workspace.addEventListener('mousemove', (e) => {
     const pt = getCanvasMouse(e);
     const statusCoords = document.getElementById('status-coords');
@@ -3838,52 +2626,10 @@ workspace.addEventListener('mousemove', (e) => {
         }
     }
 
-    isMouseOverCanvas = (pt.x >= 0 && pt.x < width && pt.y >= 0 && pt.y < height);
-    if (isMouseOverCanvas) {
-        hoverX = pt.x;
-        hoverY = pt.y;
-    } else {
-        hoverX = -1;
-        hoverY = -1;
-    }
-
     if (isPanning) {
         panX = e.clientX - startX;
         panY = e.clientY - startY;
         applyTransform();
-        return;
-    }
-
-    if (isEditingUVManually && uvSelectedFaceIndex !== -1 && uvActiveHandle && tempUVTemplate) {
-        let dx = Math.round(pt.rawX - uvDragStartX);
-        let dy = Math.round(pt.rawY - uvDragStartY);
-        let face = tempUVTemplate.faces[uvSelectedFaceIndex];
-        
-        if (uvActiveHandle === 'move') {
-            face.x = Math.max(0, Math.min(width - face.w, uvInitFaceRect.x + dx));
-            face.y = Math.max(0, Math.min(height - face.h, uvInitFaceRect.y + dy));
-        } else if (uvActiveHandle === 'br') {
-            face.w = Math.max(1, Math.min(width - face.x, uvInitFaceRect.w + dx));
-            face.h = Math.max(1, Math.min(height - face.y, uvInitFaceRect.h + dy));
-        } else if (uvActiveHandle === 'tl') {
-            let newX = Math.max(0, Math.min(uvInitFaceRect.x + uvInitFaceRect.w - 1, uvInitFaceRect.x + dx));
-            let newY = Math.max(0, Math.min(uvInitFaceRect.y + uvInitFaceRect.h - 1, uvInitFaceRect.y + dy));
-            face.w = uvInitFaceRect.x + uvInitFaceRect.w - newX;
-            face.h = uvInitFaceRect.y + uvInitFaceRect.h - newY;
-            face.x = newX;
-            face.y = newY;
-        } else if (uvActiveHandle === 'tr') {
-            face.w = Math.max(1, Math.min(width - face.x, uvInitFaceRect.w + dx));
-            let newY = Math.max(0, Math.min(uvInitFaceRect.y + uvInitFaceRect.h - 1, uvInitFaceRect.y + dy));
-            face.h = uvInitFaceRect.y + uvInitFaceRect.h - newY;
-            face.y = newY;
-        } else if (uvActiveHandle === 'bl') {
-            let newX = Math.max(0, Math.min(uvInitFaceRect.x + uvInitFaceRect.w - 1, uvInitFaceRect.x + dx));
-            face.w = uvInitFaceRect.x + uvInitFaceRect.w - newX;
-            face.x = newX;
-            face.h = Math.max(1, Math.min(height - face.y, uvInitFaceRect.h + dy));
-        }
-        updateUVInputsForFace(uvSelectedFaceIndex, face);
         return;
     }
 
@@ -3917,26 +2663,25 @@ workspace.addEventListener('mousemove', (e) => {
 
     if (!isDrawing) return;
 
-    if (currentTool === 'forceBrush') {
-        const dx = pt.rawX - lastX;
-        const dy = pt.rawY - lastY;
-        const len = Math.hypot(dx, dy);
-        if (len > 0.05) {
-            const forceMag = 1.5;
-            injectForce(pt.x, pt.y, (dx / len) * forceMag, (dy / len) * forceMag, brushSize);
-        }
-        lastX = pt.rawX;
-        lastY = pt.rawY;
-        return;
-    }
-
-    const currentLayer = getActiveLayer();
-    if (!currentLayer) return;
-    const ctx = currentLayer.ctx;
+    const ctx = layers[activeLayerIndex].ctx;
 
     if (currentTool === 'pencil' || currentTool === 'eraser') {
         const pts = getBresenhamPoints(lastX, lastY, pt.x, pt.y);
         pts.forEach(p => {
+            // Mitigación Anti-Jaggies en Tiempo Real (Novedad Pro Tools 2)
+            if (document.getElementById('chk-anti-jaggies')?.checked && !isEraser && strokePoints.length > 0) {
+                let lastPt = strokePoints[strokePoints.length - 1];
+                if (strokePoints.length >= 2) {
+                    let p0 = strokePoints[strokePoints.length - 2];
+                    let p1 = lastPt;
+                    let p2 = p;
+                    // Detectar paso de esquina redundante
+                    if ((p0.x === p1.x || p0.y === p1.y) && (p1.x === p2.x || p1.y === p2.y) && p0.x !== p2.x && p0.y !== p2.y) {
+                        ctx.clearRect(p1.x, p1.y, 1, 1);
+                        strokePoints.pop();
+                    }
+                }
+            }
             strokePoints.push({x: p.x, y: p.y});
             drawPoint(ctx, p.x, p.y, currentColor, brushSize, currentTool === 'eraser', false);
         });
@@ -3957,17 +2702,7 @@ workspace.addEventListener('mousemove', (e) => {
     }
 });
 
-workspace.addEventListener('mouseleave', () => {
-    isMouseOverCanvas = false;
-    hoverX = -1;
-    hoverY = -1;
-});
-
 window.addEventListener('mouseup', () => {
-    if (isEditingUVManually) {
-        uvActiveHandle = null;
-        return;
-    }
     if (isPanning) {
         isPanning = false;
         workspace.style.cursor = (currentTool === 'hand') ? 'grab' : 'crosshair';
@@ -3980,12 +2715,7 @@ window.addEventListener('mouseup', () => {
     }
     if (isDrawing) {
         isDrawing = false;
-        if (currentTool === 'forceBrush') return;
-
-        const currentLayer = getActiveLayer();
-        if (!currentLayer) return;
-        const ctx = currentLayer.ctx;
-
+        const ctx = layers[activeLayerIndex].ctx;
         if (currentTool === 'gradient') {
             saveState();
             applyGradient(ctx, startX, startY, lastX, lastY);
@@ -4083,14 +2813,4 @@ function isPointInPolygon(point, vs) {
     return inside;
 }
 
-// Registro en el Entorno Global para la UI
-window.addFrame = addFrame;
-window.duplicateFrame = duplicateFrame;
-window.deleteFrame = deleteFrame;
-window.togglePlayback = togglePlayback;
-window.toggleOnionSkin = toggleOnionSkin;
-window.exportSpritesheet = exportSpritesheet;
-window.bakeParticlesToActiveLayer = bakeParticlesToActiveLayer;
-
-// Arranque de la Aplicación
 window.onload = () => { createNewProject(); init(); applyLanguage(); };
