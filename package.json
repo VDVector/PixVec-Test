@@ -10,6 +10,7 @@
   },
   "build": {
     "appId": "com.gadexlabs.pixvec",
+    "publish": null,
     "productName": "PiXVec",
     "mac": {
       "target": [
