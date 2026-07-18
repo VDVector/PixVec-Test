@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VFXVec Pixelart Animation - VFX & Cinematic Studio</title>
+    <title>PiXVec - Professional Pixel Art Editor</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { 
@@ -69,7 +69,7 @@
     <!-- Encabezado Principal -->
     <header class="bg-[#09090b] border-b border-zinc-800 h-14 flex items-center justify-between px-5 z-40 relative shadow-lg">
         <div class="flex items-center gap-4">
-            <div class="text-blue-500 font-extrabold text-2xl tracking-widest mr-2 drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]">VFXVec <span class="text-[10px] text-zinc-500 align-super">v2.1</span></div>
+            <div class="text-blue-500 font-extrabold text-2xl tracking-widest mr-2 drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]">PiXVec <span class="text-[10px] text-zinc-500 align-super">v2.0</span></div>
             
             <!-- Menú de Simetría -->
             <div class="relative flex items-center">
@@ -170,6 +170,7 @@
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v18H3z"/><path d="M9 3v18"/><path d="M15 3v18"/><path d="M3 9h18"/><path d="M3 15h18"/></svg>
             </button>
             
+            <!-- Botón Tiled Seamless Preview -->
             <button onclick="toggleTiledMode()" id="btn-tiled-mode" class="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-all" title="Previsualización Seamless / Tiled Mode">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
             </button>
@@ -190,7 +191,7 @@
     </header>
 
     <div class="flex flex-1 overflow-hidden">
-        <!-- Barra Lateral Izquierda (Herramientas con VFX) -->
+        <!-- Barra Lateral Izquierda -->
         <aside class="w-16 bg-[#121214] border-r border-zinc-800 flex flex-col items-center py-4 gap-2 z-35 overflow-y-auto shadow-xl" id="tools-container">
             <button class="tool-btn active w-11 h-11 rounded-xl flex items-center justify-center text-zinc-400 shrink-0" data-tool="pencil" title="Lápiz (P)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg></button>
             <button class="tool-btn w-11 h-11 rounded-xl flex items-center justify-center text-zinc-400 shrink-0" data-tool="eraser" title="Borrador (E)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 20H7L3 16C2.5 15.5 2.5 14.5 3 14L13 4C13.5 3.5 14.5 3.5 15 4L20 9C20.5 9.5 20.5 10.5 20 11L11 20H20V20Z"/></svg></button>
@@ -207,11 +208,6 @@
             <button class="tool-btn w-11 h-11 rounded-xl flex items-center justify-center text-zinc-400 shrink-0" data-tool="lassoSelect" title="Lazo de Selección"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 20a3 3 0 1 0 6 0c0-1.7-1.3-3-3-3s-3 1.3-3 3Z"/><path d="M11 17c0-2-3-3-5-5-2-2-1-4.5 1-6s4-1 6 1c2 2 1.5 5-1 7l-1 2"/></svg></button>
             <button class="tool-btn w-11 h-11 rounded-xl flex items-center justify-center text-zinc-400 shrink-0" data-tool="gradient" title="Degradado (G)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="12" x2="21" y2="12"/></svg></button>
             
-            <!-- Herramientas Exclusivas VFX (Pincel de Fuerza Vectorial y Emitter) -->
-            <div class="w-8 h-px bg-zinc-800 my-1 shrink-0"></div>
-            <button class="tool-btn w-11 h-11 rounded-xl flex items-center justify-center text-zinc-400 shrink-0 hover:text-blue-400" data-tool="forceBrush" title="Pincel de Fuerza Vectorial"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12h20M2 12c4-4 8-4 12 0s8 4 12 0"/><path d="m18 8 4 4-4 4"/></svg></button>
-            <button class="tool-btn w-11 h-11 rounded-xl flex items-center justify-center text-zinc-400 shrink-0 hover:text-yellow-400" data-tool="emitterTool" title="Añadir Emisor VFX"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/></svg></button>
-
             <div class="w-8 h-px bg-zinc-800 my-1 shrink-0"></div>
             <button class="tool-btn w-11 h-11 rounded-xl flex items-center justify-center text-zinc-400 shrink-0" data-tool="hand" title="Mano / Mover (Espacio)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0"/><path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg></button>
             
@@ -228,6 +224,7 @@
                 <button onclick="togglePixelPerfect()" id="btn-pixelperfect" class="w-full py-1 text-[8px] uppercase font-bold text-zinc-400 hover:text-white bg-zinc-950 border border-zinc-850 rounded hover:bg-zinc-800 transition-colors">
                     Pixel: OFF
                 </button>
+                <!-- Asistente Isométrico -->
                 <button onclick="toggleIsoAssist()" id="btn-isoassist" class="w-full py-1 text-[8px] uppercase font-bold text-zinc-400 hover:text-white bg-zinc-950 border border-zinc-850 rounded hover:bg-zinc-800 transition-colors" title="Forzar líneas isométricas de proporción 2:1">
                     Isometric: OFF
                 </button>
@@ -238,6 +235,7 @@
         <main id="workspace" class="flex-1 relative bg-[#09090b] overflow-hidden cursor-crosshair outline-none" tabindex="0">
             <div id="canvas-wrapper">
                 <canvas id="bg-canvas" class="absolute top-0 left-0 pixelated-canvas"></canvas>
+                <!-- Capa de Referencia Interactiva -->
                 <img id="ref-image-element" class="absolute pointer-events-none opacity-40 origin-top-left hidden" style="z-index: 5;" />
                 <canvas id="main-canvas" class="absolute top-0 left-0 pointer-events-none pixelated-canvas"></canvas>
                 <canvas id="selection-canvas" class="absolute top-0 left-0 pointer-events-none opacity-50 mix-blend-screen pixelated-canvas"></canvas>
@@ -325,7 +323,7 @@
                 </div>
             </div>
 
-            <!-- CONTENIDO PESTAÑA: GESTOR DE CAPAS -->
+            <!-- CONTENIDO PESTAÑA: GESTOR DE CAPAS (SIN ANIMACIÓN) -->
             <div id="panel-layers" class="hidden flex-1 flex flex-col p-4 overflow-y-auto gap-4">
                 <div class="flex items-center justify-between">
                     <h3 id="label-layers" class="text-xs text-zinc-400 uppercase tracking-widest font-bold">Capas</h3>
@@ -363,7 +361,7 @@
 
                 <div id="layers-list" class="flex-1 overflow-y-auto flex flex-col-reverse gap-1.5 pr-1 min-h-[140px]"></div>
 
-                <!-- Tinte y Ajustes de Capa directos -->
+                <!-- FUNCIONALIDAD NOVEDOSA EN CAPAS: TINTE Y AJUSTES DE CAPA DIRECTOS -->
                 <div class="bg-zinc-950 p-3 rounded-xl border border-zinc-850 flex flex-col gap-3">
                     <span class="text-[10px] font-extrabold uppercase tracking-widest text-blue-400">Tinte y Ajustes de Capa</span>
                     <div class="flex items-center gap-2">
@@ -383,22 +381,9 @@
                 </div>
             </div>
 
-            <!-- CONTENIDO PESTAÑA: PRO TOOLS -->
+            <!-- CONTENIDO PESTAÑA: PRO TOOLS (CON LAS NUEVAS HERRAMIENTAS ADICIONALES) -->
             <div id="panel-tools" class="hidden flex-1 flex flex-col p-4 overflow-y-auto gap-4">
-                <!-- Configuración del Motor de Partículas VFX -->
-                <div class="bg-zinc-950 p-3 rounded-xl border border-yellow-900/50 flex flex-col gap-2.5">
-                    <span class="text-[10px] font-extrabold text-yellow-500 uppercase tracking-wider border-b border-zinc-800 pb-1.5">Física y Emisores VFX</span>
-                    <p class="text-[9px] text-zinc-500">Añade emisores interactivos en el lienzo y dibuja corrientes con el pincel de fuerzas.</p>
-                    <div class="flex flex-col gap-2">
-                        <button onclick="selectTool('emitterTool')" class="w-full bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-yellow-400 py-1.5 rounded border border-zinc-800 text-[9px] font-bold uppercase transition-all">Activar Herramienta Emisor</button>
-                        <button onclick="selectTool('forceBrush')" class="w-full bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-blue-400 py-1.5 rounded border border-zinc-800 text-[9px] font-bold uppercase transition-all">Pintar Campos de Fuerza</button>
-                        <button onclick="vectorField.fill(0)" class="w-full bg-zinc-950 hover:bg-red-950/30 text-red-500 py-1 rounded border border-red-900/30 text-[9px] font-bold uppercase transition-all">Limpiar Vectores de Fuerza</button>
-                        <div class="h-px bg-zinc-800 w-full my-1"></div>
-                        <button onclick="bakeParticlesToActiveLayer()" class="w-full bg-yellow-600 hover:bg-yellow-500 text-black py-2 rounded-lg text-[10px] font-extrabold uppercase shadow-lg transition-all">Estampar Partículas (Bake VFX)</button>
-                    </div>
-                </div>
-
-                <!-- Pincel Sombreador Inteligente -->
+                <!-- 1. Pincel Sombreador Inteligente -->
                 <div class="bg-zinc-950 p-3 rounded-xl border border-zinc-850 flex flex-col gap-2">
                     <div class="flex justify-between items-center">
                         <span id="label-title-shading" class="text-[10px] font-extrabold text-blue-400 uppercase">Pincel Sombreador</span>
@@ -414,7 +399,7 @@
                     </div>
                 </div>
 
-                <!-- Guías de Perspectiva -->
+                <!-- 2. Guías de Perspectiva (NUEVA HERRAMIENTA PRO 1) -->
                 <div class="bg-zinc-950 p-3 rounded-xl border border-zinc-850 flex flex-col gap-2.5">
                     <div class="flex justify-between items-center">
                         <span class="text-[10px] font-extrabold text-blue-400 uppercase">Guías de Perspectiva</span>
@@ -440,47 +425,41 @@
                     </div>
                 </div>
 
-                <!-- Conversor Isométrico -->
+                <!-- 3. Limpiador Anti-Jaggies (NUEVA HERRAMIENTA PRO 2) -->
                 <div class="bg-zinc-950 p-3 rounded-xl border border-zinc-850 flex flex-col gap-2.5">
                     <div class="flex justify-between items-center">
-                        <span class="text-[10px] font-extrabold text-emerald-400 uppercase">Conversor Isométrico</span>
+                        <span class="text-[10px] font-extrabold text-emerald-400 uppercase">Limpiador Anti-Jaggies</span>
+                        <input type="checkbox" id="chk-anti-jaggies" class="w-4 h-4 accent-emerald-500">
                     </div>
-                    <p class="text-[9px] text-zinc-500">Convierte el área de la selección actual en una proyección isométrica.</p>
-                    <div class="flex flex-col gap-2">
-                        <div class="flex flex-col">
-                            <span class="text-[8px] font-bold text-zinc-500 uppercase mb-0.5">Cara de Proyección</span>
-                            <select id="iso-projection-face" class="w-full bg-zinc-900 border border-zinc-800 rounded py-1.5 px-1.5 text-xs text-white">
-                                <option value="left">Izquierda (Left Face)</option>
-                                <option value="right">Derecha (Right Face)</option>
-                                <option value="top">Superior (Top Face)</option>
-                            </select>
+                    <p class="text-[9px] text-zinc-500">Evita esquinas dobles automáticas (píxeles extra en diagonales) mientras dibujas.</p>
+                    <button onclick="applyCleanDoubles()" class="w-full bg-zinc-900 hover:bg-emerald-800 text-zinc-300 hover:text-white py-1.5 rounded-lg text-[9px] font-bold uppercase transition-all">Limpiar Dobles en Capa Activa</button>
+                </div>
+
+                <!-- 4. Imagen de Referencia -->
+                <div class="bg-zinc-950 p-3 rounded-xl border border-zinc-850 flex flex-col gap-3">
+                    <span id="label-title-ref" class="text-[10px] font-extrabold text-purple-400 uppercase">Imagen de Referencia</span>
+                    <div class="flex gap-1.5">
+                        <button onclick="document.getElementById('ref-image-upload').click()" class="flex-grow bg-zinc-900 hover:bg-purple-900/60 text-zinc-300 py-1.5 px-3 rounded-lg text-[9px] font-bold transition-all uppercase">Cargar Imagen</button>
+                        <button onclick="clearReferenceImage()" class="bg-red-950/40 hover:bg-red-600 text-red-200 px-2 rounded-lg text-[9px] font-bold transition-all uppercase">X</button>
+                    </div>
+                    <input type="file" id="ref-image-upload" class="hidden" accept="image/*">
+                    
+                    <div class="flex flex-col gap-1.5 text-[9px] text-zinc-400 font-bold">
+                        <div class="flex justify-between">
+                            <span>Opacidad</span>
+                            <span id="ref-opac-disp">40%</span>
                         </div>
-                        <button onclick="convertSelectionToIsometric(document.getElementById('iso-projection-face').value)" class="w-full bg-zinc-900 hover:bg-emerald-800 text-zinc-300 hover:text-white py-1.5 rounded-lg text-[9px] font-bold uppercase transition-all">Convertir Selección</button>
+                        <input type="range" id="ref-opacity" min="0" max="1" step="0.05" value="0.4" oninput="updateRefParams()">
+
+                        <div class="flex justify-between mt-1">
+                            <span>Escala</span>
+                            <span id="ref-scale-disp">1.0x</span>
+                        </div>
+                        <input type="range" id="ref-scale" min="0.1" max="5.0" step="0.05" value="1" oninput="updateRefParams()">
                     </div>
                 </div>
 
-                <!-- Plantillas de Mapas UV -->
-                <div class="bg-zinc-950 p-3 rounded-xl border border-zinc-850 flex flex-col gap-2.5">
-                    <div class="flex justify-between items-center">
-                        <span class="text-[10px] font-extrabold text-blue-400 uppercase">Plantillas UV</span>
-                        <div class="flex items-center gap-1">
-                            <input type="checkbox" id="chk-uv-overlay" onchange="toggleUVOverlay(this.checked)" class="w-4 h-4 accent-blue-500">
-                            <span class="text-[8px] text-zinc-400 uppercase font-bold">Ver</span>
-                        </div>
-                    </div>
-                    <p class="text-[9px] text-zinc-500">Superpone guías de texturizado para modelos 3D y skins.</p>
-                    <div class="flex flex-col gap-2">
-                        <select id="uv-template-select" onchange="selectUVTemplate(this.value)" class="w-full bg-zinc-900 border border-zinc-800 rounded py-1 px-1.5 text-xs text-white outline-none cursor-pointer">
-                            <option value="">-- Seleccionar Plantilla --</option>
-                        </select>
-                        <div class="grid grid-cols-2 gap-1.5">
-                            <button onclick="openUVManager()" class="bg-zinc-900 hover:bg-blue-600 text-zinc-300 hover:text-white py-1.5 rounded-lg text-[9px] font-bold uppercase transition-all">Gestionar</button>
-                            <button onclick="stampUVTemplateToLayer()" class="bg-zinc-900 hover:bg-blue-600 text-zinc-300 hover:text-white py-1.5 rounded-lg text-[9px] font-bold uppercase transition-all" title="Estampa la rejilla en la capa actual">Estampar</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Filtros Inteligentes -->
+                <!-- 5. Analizador de Paleta y Generador Inlines -->
                 <div class="bg-zinc-950 p-3 rounded-xl border border-zinc-850 flex flex-col gap-3.5">
                     <span class="text-[10px] font-extrabold text-emerald-400 uppercase">Filtros Inteligentes</span>
                     <div>
@@ -497,38 +476,6 @@
                 </div>
             </div>
         </aside>
-    </div>
-
-    <!-- CONTENEDOR TIMELINE (Línea de tiempo horizontal para Animación) -->
-    <div class="bg-[#121214] border-t border-zinc-800 h-16 flex items-center px-4 gap-4 z-40 relative select-none">
-        <!-- Controles de Reproducción -->
-        <div class="flex items-center gap-1.5 border-r border-zinc-800 pr-4 shrink-0">
-            <button onclick="togglePlayback()" id="btn-timeline-play" class="w-8 h-8 flex items-center justify-center bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition-all" title="Reproducir / Pausar">▶</button>
-            <button onclick="toggleOnionSkin()" id="btn-onion-skin" class="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-all" title="Activar Papel Cebolla (Onion Skin)">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
-            </button>
-            <div class="h-5 w-px bg-zinc-800"></div>
-            <!-- Velocidad de Animación (FPS) -->
-            <div class="flex items-center gap-1">
-                <span class="text-[9px] text-zinc-500 font-bold uppercase tracking-wider">FPS</span>
-                <input type="number" id="timeline-fps-input" value="12" min="1" max="60" onchange="timeline.fps = parseInt(this.value)||12" class="w-10 bg-zinc-950 border border-zinc-800 text-[10px] text-white text-center rounded p-0.5 font-mono">
-            </div>
-        </div>
-
-        <!-- Tira de Fotogramas -->
-        <div id="timeline-frames-list" class="flex-1 overflow-x-auto flex items-center gap-1.5 py-1 px-1">
-            <!-- Renderizado dinámico de fotogramas -->
-        </div>
-
-        <!-- Acciones del Timeline -->
-        <div class="flex items-center gap-1.5 border-l border-zinc-800 pl-4 shrink-0">
-            <button onclick="addFrame()" class="bg-zinc-900 hover:bg-zinc-800 text-[10px] text-zinc-300 px-2.5 py-1.5 border border-zinc-800 rounded font-bold uppercase transition-colors" title="Añadir Fotograma Vacío">+ Frame</button>
-            <button onclick="duplicateFrame()" class="bg-zinc-900 hover:bg-zinc-800 text-[10px] text-zinc-300 px-2.5 py-1.5 border border-zinc-800 rounded font-bold uppercase transition-colors" title="Duplicar Fotograma Actual">Duplicar</button>
-            <button onclick="deleteFrame()" class="bg-zinc-950 hover:bg-red-950/40 text-[10px] text-red-400 px-2.5 py-1.5 border border-red-900/30 rounded font-bold uppercase transition-colors" title="Eliminar Fotograma Seleccionado">Eliminar</button>
-            <div class="h-5 w-px bg-zinc-800"></div>
-            <!-- Exportador Spritesheet Directo -->
-            <button onclick="exportSpritesheet()" class="bg-emerald-950/60 hover:bg-emerald-600 text-emerald-300 hover:text-white text-[10px] px-3 py-1.5 border border-emerald-800 rounded font-extrabold uppercase transition-all shadow-lg" title="Exportar secuencia como spritesheet PNG">Spritesheet</button>
-        </div>
     </div>
 
     <!-- Barra de Estado Inferior -->
@@ -570,7 +517,7 @@
     <!-- Modal Iluminación Volumétrica -->
     <div id="modal-native-light" class="fixed inset-0 z-[60] backdrop-blur-none hidden pointer-events-none">
         <div id="native-light-content" class="glass-panel rounded-2xl p-6 w-80 shadow-2xl absolute pointer-events-auto">
-            <h2 id="modal-title-lights" class="text-md font-extrabold mb-3 text-yellow-500 text-center border-b border-zinc-800 pb-2.5 uppercase tracking-wider text-[11px] cursor-move select-none font-bold font-bold">Iluminación Volumétrica</h2>
+            <h2 id="modal-title-lights" class="text-md font-extrabold mb-3 text-yellow-500 text-center border-b border-zinc-800 pb-2.5 uppercase tracking-wider text-[11px] cursor-move select-none font-bold">Iluminación Volumétrica</h2>
             <div class="grid grid-cols-2 gap-2 mb-2">
                 <button id="modal-btn-warmspot" onclick="nativeAddLight('punto')" class="bg-zinc-900 hover:bg-zinc-800 text-[9px] border border-zinc-850 p-2 rounded-lg font-bold text-zinc-300">+ Foco Cálido</button>
                 <button id="modal-btn-directional" onclick="nativeAddLight('dir')" class="bg-zinc-900 hover:bg-zinc-800 text-[9px] border border-zinc-850 p-2 rounded-lg font-bold text-zinc-300">+ Direccional</button>
@@ -675,76 +622,11 @@
     <!-- Modal de Ajuste Dinámico de Efectos -->
     <div id="modal-effect-settings" class="fixed inset-0 z-[60] backdrop-blur-none hidden pointer-events-none">
         <div id="effect-settings-content" class="glass-panel rounded-2xl p-6 w-80 shadow-2xl absolute pointer-events-auto">
-            <h2 id="effect-settings-title" class="text-md font-extrabold mb-4 text-purple-400 text-center border-b border-zinc-800 pb-2.5 uppercase tracking-wider text-[11px] cursor-move select-none font-bold">Ajustes del Efecto</h2>
+            <h2 id="effect-settings-title" class="text-md font-extrabold mb-4 text-purple-400 text-center border-b border-zinc-800 pb-2.5 uppercase tracking-wider text-[11px] cursor-move select-none">Ajustes del Efecto</h2>
             <div id="effect-settings-body" class="flex flex-col gap-4"></div>
             <div class="flex justify-between gap-3 mt-6 pt-3 border-t border-zinc-800">
                 <button id="btn-effect-cancel" class="w-1/2 px-4 py-2 text-xs font-bold text-zinc-400 bg-zinc-900 hover:bg-zinc-800 rounded-lg transition-colors font-bold">Cancelar</button>
                 <button id="btn-effect-apply" class="w-1/2 px-4 py-2 text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white rounded-lg shadow-lg transition-colors font-bold">Aplicar</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal Gestor de Plantillas UV (Interactivo) -->
-    <div id="modal-uv-manager" class="fixed inset-0 bg-black/60 flex items-center justify-center z-[65] backdrop-blur-md hidden">
-        <div class="glass-panel rounded-2xl p-6 w-[480px] shadow-2xl flex flex-col max-h-[85vh]">
-            <h2 class="text-xl font-bold mb-3 text-white text-center border-b border-zinc-800 pb-3 uppercase tracking-wide">Gestor de Plantillas UV</h2>
-            
-            <div class="grid grid-cols-2 gap-4 mb-4">
-                <!-- Lista de plantillas guardadas -->
-                <div class="flex flex-col border-r border-zinc-800 pr-4">
-                    <span class="text-[9px] uppercase font-bold text-zinc-400 mb-2">Plantillas Guardadas</span>
-                    <div id="uv-saved-templates-list" class="flex-1 overflow-y-auto max-h-[160px] min-h-[100px] bg-black/30 p-1.5 rounded border border-zinc-850">
-                        <!-- Renderizado dinámico -->
-                    </div>
-                </div>
-                
-                <!-- Datos básicos del mapa UV -->
-                <div class="flex flex-col gap-2.5">
-                    <span class="text-[9px] uppercase font-bold text-zinc-400">Datos de Plantilla</span>
-                    <div class="flex flex-col">
-                        <label class="text-[8px] text-zinc-500 font-bold uppercase mb-0.5">Nombre de Plantilla</label>
-                        <input type="text" id="uv-m-name" placeholder="Ej: Cubo de Bloque" class="bg-[#09090b] border border-zinc-800 rounded px-2.5 py-1 text-xs text-white outline-none">
-                    </div>
-                    <div class="grid grid-cols-2 gap-2">
-                        <div class="flex flex-col">
-                            <label class="text-[8px] text-zinc-500 font-bold uppercase mb-0.5">Ancho (px)</label>
-                            <input type="number" id="uv-m-width" value="64" class="bg-[#09090b] border border-zinc-800 rounded px-2 py-1 text-center text-xs text-white font-mono">
-                        </div>
-                        <div class="flex flex-col">
-                            <label class="text-[8px] text-zinc-500 font-bold uppercase mb-0.5">Alto (px)</label>
-                            <input type="number" id="uv-m-height" value="64" class="bg-[#09090b] border border-zinc-800 rounded px-2 py-1 text-center text-xs text-white font-mono">
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="flex justify-between items-center mb-1.5 border-t border-zinc-800 pt-3">
-                <span class="text-[9px] uppercase font-bold text-zinc-400">Figuras / Caras del Mapa</span>
-                <button onclick="addTempFace()" class="bg-blue-900 hover:bg-blue-600 text-white text-[9px] font-bold px-2.5 py-1 rounded border border-blue-800 transition-colors uppercase">+ Añadir Cara</button>
-            </div>
-            
-            <!-- Lista de Caras -->
-            <div class="flex-1 overflow-y-auto min-h-[120px] max-h-[180px] bg-black/30 rounded border border-zinc-850 mb-4">
-                <table class="w-full border-collapse">
-                    <thead>
-                        <tr class="bg-zinc-900 border-b border-zinc-800 text-[9px] uppercase font-bold text-zinc-400">
-                            <th class="p-1.5 text-left w-1/3">Nombre</th>
-                            <th class="p-1.5 text-center">X</th>
-                            <th class="p-1.5 text-center">Y</th>
-                            <th class="p-1.5 text-center">W</th>
-                            <th class="p-1.5 text-center">H</th>
-                            <th class="p-1.5 text-left">Color</th>
-                        </tr>
-                    </thead>
-                    <tbody id="uv-faces-container">
-                        <!-- Renderizado dinámico -->
-                    </tbody>
-                </table>
-            </div>
-
-            <div class="flex justify-between gap-3 mt-auto">
-                <button onclick="closeUVManager()" class="w-1/2 px-4 py-2 text-xs font-bold text-zinc-400 bg-zinc-900 hover:bg-zinc-800 rounded-lg transition-colors uppercase font-bold">Cerrar</button>
-                <button onclick="saveUVTemplateFromManager()" class="w-1/2 px-4 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white rounded-lg shadow-lg transition-colors uppercase font-bold">Guardar Plantilla</button>
             </div>
         </div>
     </div>
