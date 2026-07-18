@@ -1,1 +1,24 @@
+name: Build macOS App
+on:
+  push:
+    branches: [ "main", "master" ] 
+jobs:
+  build-mac:
+    runs-on: macos-latest
+    steps:
+    - name: Descargar el código
+      uses: actions/checkout@v4
 
+    - name: Instalar Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18' 
+    - name: Instalar dependencias
+      run: npm install
+    - name: Compilar para macOS
+      run: npm run dist -- --mac
+    - name: Guardar el instalador (.dmg)
+      uses: actions/upload-artifact@v4
+      with:
+        name: pixvec-mac-installer
+        path: dist/*.dmg
